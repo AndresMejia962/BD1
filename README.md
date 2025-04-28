@@ -15,21 +15,44 @@ La aplicación está diseñada para facilitar la administración de inventarios 
 - **Generación de reportes**: Generación de reportes de ventas, inventario y pagos en formato PDF y Excel.
 - **Seguridad**: Acceso controlado mediante autenticación de usuario y roles.
 
-## Requisitos
+## Estructura del Proyecto
 
-Para ejecutar este proyecto necesitas tener instalado:
+El proyecto se organiza en varios archivos, cada uno con una funcionalidad específica:
 
-- Python 3.x
-- MySQL
-- Tkinter (viene incluido con la instalación estándar de Python)
-- Bibliotecas adicionales de Python:
-  - `mysql-connector`
-  - `bcrypt`
-  - `pandas`
-  - `reportlab`
-  - `matplotlib`
+- **`database.py`**: Contiene las funciones necesarias para interactuar con la base de datos MySQL, como la conexión y la obtención de datos (productos, proveedores, clientes, etc.).
+- **`config.py`**: Archivo de configuración, donde se gestiona el rol de usuario.
+- **`main.py`**: Punto de entrada de la aplicación, donde se configura la interfaz y se inicia la ventana de inicio de sesión.
+- **`ui.py`**: Contiene las funciones para la interfaz gráfica, incluyendo la ventana de inicio de sesión y la ventana principal.
+- **`business_logic.py`**: Contiene las funciones relacionadas con la lógica de negocio, como la gestión de productos, ventas y generación de reportes.
+- **`reports.py`**: Contiene la lógica para generar reportes en formatos PDF y Excel.
+- **`styles.py`**: Define los estilos de la interfaz gráfica.
 
-Puedes instalar las bibliotecas necesarias con el siguiente comando:
+## Uso
 
-```bash
-pip install mysql-connector-python bcrypt pandas reportlab matplotlib
+### Iniciar sesión
+
+Al abrir la aplicación, aparecerá una ventana de inicio de sesión. Usa las credenciales predefinidas:
+
+- **Usuario**: `andrea`, **Contraseña**: `admin123` (para administrador)
+- **Usuario**: `pedro`, **Contraseña**: `empleado123` (para empleado)
+
+### Interfaz principal
+
+Después de iniciar sesión, accederás a la ventana principal donde podrás gestionar productos, proveedores, clientes y realizar ventas.
+
+### Generación de reportes
+
+Desde la interfaz principal, puedes generar reportes de ventas, inventario y pagos, y exportarlos a Excel o PDF.
+
+### Seguridad
+
+Los roles definen qué acciones puede realizar cada usuario. Los administradores pueden gestionar todo, mientras que los empleados solo pueden registrar ventas y consultar datos.
+
+## Contribución
+
+Si deseas contribuir al proyecto, por favor sigue estos pasos:
+
+1. Realiza un fork del repositorio.
+2. Crea una rama para tu nueva característica:  
+   ```bash
+   git checkout -b feature-nueva-caracteristica

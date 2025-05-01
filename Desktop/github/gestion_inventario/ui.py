@@ -44,8 +44,19 @@ class Tooltip:
             self.tooltip_window = None
 
 def cerrar_ventana(ventana):
-    ventana.quit()  # Termina el bucle principal
-    ventana.destroy()
+    if isinstance(ventana, tk.Tk):  # Si es la ventana principal
+        ventana.quit()  # Termina el bucle principal
+        ventana.destroy()  # Destruye la ventana
+        sys.exit()  # Cierra la aplicación
+    else:  # Si es una ventana secundaria
+        if hasattr(ventana, 'master') and ventana.master:
+            ventana.master.deiconify()  # Mostrar la ventana padre
+        ventana.destroy()  # Cerrar solo esta ventana
+
+def cerrar_ventana_secundaria(ventana_secundaria, ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.deiconify()  # Mostrar la ventana principal
+    ventana_secundaria.destroy()  # Cerrar la ventana secundaria
 
 # Función para la ventana de inicio de sesión
 def ventana_inicio_sesion(ventana_raiz):
@@ -54,11 +65,11 @@ def ventana_inicio_sesion(ventana_raiz):
 
     login_window = tk.Toplevel(ventana_raiz)
     login_window.title("Inicio de Sesión")
-    login_window.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana(login_window))  # Cerrar la ventana de login 
-    login_window.config(bg="#263238")  # Configurar el fondo de la ventana de inicio de sesión
+    login_window.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana(login_window))
+    login_window.config(bg="#263238")
 
     ventana_ancho = 350
-    ventana_alto = 250
+    ventana_alto = 300  # Aumentado para acomodar el nuevo botón
     pantalla_ancho = login_window.winfo_screenwidth()
     pantalla_alto = login_window.winfo_screenheight()
     x = (pantalla_ancho // 2) - (ventana_ancho // 2)
@@ -81,7 +92,26 @@ def ventana_inicio_sesion(ventana_raiz):
     ttk.Label(frame, text="Contraseña:").pack()
     entry_contrasena = ttk.Entry(frame, show="*")
     entry_contrasena.pack(fill="x", pady=5)
-    entry_contrasena.delete(0, tk.END)
+
+    # Crear frame para contraseña y su ícono de información
+    frame_password = ttk.Frame(frame)
+    frame_password.pack(fill="x", pady=0)
+
+    # Ícono de información
+    info_label = ttk.Label(frame_password, text="ℹ️", cursor="hand2")
+    info_label.pack(side="left", padx=5)
+
+    # Crear tooltip para los requisitos de contraseña
+    requisitos_texto = ("La contraseña debe tener:\n" +
+                      "• Mínimo 8 caracteres\n" +
+                      "• Una letra mayúscula\n" +
+                      "• Una letra minúscula\n" +
+                      "• Un número\n" +
+                      "• Un carácter especial")
+    
+    tooltip_requisitos = Tooltip(info_label, requisitos_texto)
+    info_label.bind("<Enter>", lambda e: tooltip_requisitos.show())
+    info_label.bind("<Leave>", lambda e: tooltip_requisitos.hide())
 
     label_intentos = ttk.Label(frame, text=f"Intentos restantes: {MAX_INTENTOS - intentos_login}")
     label_intentos.pack(pady=5)
@@ -101,18 +131,20 @@ def ventana_inicio_sesion(ventana_raiz):
         try:
             db = conectar_db()
             cursor = db.cursor()
-            cursor.execute("SELECT password, rol FROM usuarios WHERE username = %s", (username,))
+            cursor.execute("SELECT usuario_id, password, rol, nombre FROM usuarios WHERE username = %s", (username,))
             resultado = cursor.fetchone()
             db.close()
 
             if resultado:
-                stored_password = resultado[0]
-                rol = resultado[1]
-
+                usuario_id, stored_password, rol, nombre = resultado
                 if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
                     config.usuario_rol = rol
+                    config.usuario_id = usuario_id
+                    config.usuario_nombre = nombre
                     print(f"Rol asignado: {config.usuario_rol}")
-                    messagebox.showinfo("Éxito", f"Bienvenido, {username} ({rol})")
+                    print(f"Usuario ID: {config.usuario_id}")
+                    print(f"Nombre: {config.usuario_nombre}")
+                    messagebox.showinfo("Éxito", f"Bienvenido, {nombre} ({rol})")
                     login_window.destroy()
                     ventana_raiz.deiconify()
                     mostrar_ventana_principal(ventana_raiz)
@@ -144,6 +176,9 @@ def ventana_inicio_sesion(ventana_raiz):
     btn_login = ttk.Button(frame_botones, text="Iniciar Sesión", command=iniciar_sesion, style="Custom.TButton")
     btn_login.pack(side="left", padx=5)
 
+    btn_registro = ttk.Button(frame_botones, text="Registrarse", command=lambda: ventana_registro(ventana_raiz), style="Custom.TButton")
+    btn_registro.pack(side="left", padx=5)
+
     btn_salir = ttk.Button(frame_botones, text="Salir", command=salir_programa, style="Custom.TButton")
     btn_salir.pack(side="right", padx=5)
 
@@ -165,7 +200,6 @@ def mostrar_ventana_principal(ventana_raiz):
     y = (pantalla_alto // 2) - (ventana_alto // 2)
     ventana_raiz.geometry(f"{ventana_ancho}x{ventana_alto}+{x}+{y}")
    
-
     aplicar_estilo()
 
     frame_principal = ttk.Frame(ventana_raiz)
@@ -180,40 +214,131 @@ def mostrar_ventana_principal(ventana_raiz):
     header_label = ttk.Label(content_frame, text="Gestión de Inventario", style="Header.TLabel")
     header_label.pack(pady=(0, 20))
 
-    summary_frame = ttk.LabelFrame(content_frame, text="Resumen", padding=10, style="Header.TFrame")
-    summary_frame.pack(fill="x", pady=10)
-    summary_frame.pack(fill="both", expand=True)
+    # Frame para el resumen con estilo mejorado
+    summary_frame = ttk.LabelFrame(content_frame, text="📊 Resumen del Sistema", padding=15, style="Header.TFrame")
+    summary_frame.pack(fill="both", expand=True, padx=20, pady=15)
 
-    canvas_widget = actualizar_resumen(summary_frame)
+    # Frame interno para el contenido del resumen
+    summary_content = ttk.Frame(summary_frame, style="Summary.TFrame")
+    summary_content.pack(fill="both", expand=True, padx=10, pady=10)
 
-    btn_actualizar = ttk.Button(content_frame, text="Actualizar Resumen", command=lambda: actualizar_resumen(summary_frame, canvas_widget), style="Custom.TButton")
-    btn_actualizar.pack(pady=10)
+    # Título del resumen con estilo mejorado
+    summary_title = ttk.Label(summary_content, 
+                            text="Estado Actual del Inventario", 
+                            style="Header.TLabel",
+                            font=("Helvetica", 14, "bold"))
+    summary_title.pack(pady=(0, 15))
 
-    btn_consultar_productos = ttk.Button(sidebar_frame, text="Consultar Productos", command=consultar_productos, style="Custom.TButton")
+    # Frame para las métricas con estilo de tarjetas
+    metrics_frame = ttk.Frame(summary_content, style="Summary.TFrame")
+    metrics_frame.pack(fill="x", pady=5)
+
+    # Estilo para las métricas
+    style = ttk.Style()
+    style.configure("Metric.TLabel", 
+                   font=("Helvetica", 11),
+                   padding=10,
+                   background="#37474F",
+                   foreground="#E0E0E0")
+
+    style.configure("Metric.TFrame",
+                   background="#37474F",
+                   relief="raised",
+                   borderwidth=1)
+
+    # Función para crear una tarjeta métrica
+    def create_metric_card(parent, icon, title, value, tooltip=None):
+        frame = ttk.Frame(parent, style="Metric.TFrame")
+        frame.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+        
+        # Ícono y título en la misma línea
+        icon_label = ttk.Label(frame, text=icon, font=("Helvetica", 16), foreground="#E0E0E0", background="#37474F")
+        icon_label.pack(side="left", padx=5)
+        
+        title_label = ttk.Label(frame, text=title, style="Metric.TLabel", background="#37474F")
+        title_label.pack(side="left", padx=5)
+        
+        value_label = ttk.Label(frame, text=value, font=("Helvetica", 16, "bold"), foreground="#E0E0E0", background="#37474F")
+        value_label.pack(side="right", padx=5)
+        
+        if tooltip:
+            tooltip_obj = Tooltip(frame, tooltip)
+            frame.bind("<Enter>", lambda e: tooltip_obj.show())
+            frame.bind("<Leave>", lambda e: tooltip_obj.hide())
+        
+        return value_label
+
+    # Crear las tarjetas de métricas con referencias a los labels
+    total_productos_label = create_metric_card(metrics_frame, "📦", "Total Productos", "0")
+    stock_total_label = create_metric_card(metrics_frame, "📏", "Stock Total", "0")
+    total_ventas_label = create_metric_card(metrics_frame, "🛒", "Total Ventas", "0")
+    total_ingresos_label = create_metric_card(metrics_frame, "💰", "Total Ingresos", "$0.00")
+    bajo_stock_label = create_metric_card(metrics_frame, "⚠️", "Bajo Stock", "0", "Productos con stock bajo")
+
+    # Separador con estilo
+    separator = ttk.Separator(summary_content, orient="horizontal")
+    separator.pack(fill="x", pady=15)
+
+    # Frame para el gráfico
+    chart_frame = ttk.LabelFrame(summary_content, text="📈 Gráfico de Ventas", padding=10, style="Dark.TLabelframe")
+    chart_frame.pack(fill="both", expand=True, pady=10)
+
+    # Configurar el estilo del frame
+    style = ttk.Style()
+    style.configure("Dark.TLabelframe", background="#263238", foreground="#E0E0E0")
+    style.configure("Dark.TLabelframe.Label", background="#263238", foreground="#E0E0E0")
+
+    # Botón de actualización con estilo mejorado
+    btn_actualizar = ttk.Button(summary_content, 
+                               text="🔄 Actualizar Resumen", 
+                               command=lambda: actualizar_resumen(summary_frame),
+                               style="Custom.TButton")
+    btn_actualizar.pack(pady=15)
+
+    # Primera actualización del resumen
+    actualizar_resumen(summary_frame)
+
+    btn_consultar_productos = ttk.Button(sidebar_frame, text="Consultar Productos", 
+                                       command=lambda: consultar_productos(ventana_raiz), 
+                                       style="Custom.TButton")
     btn_consultar_productos.pack(pady=5, padx=10)
 
-    btn_agregar_producto = ttk.Button(sidebar_frame, text="Agregar Producto", command=agregar_producto, style="Custom.TButton")
+    btn_agregar_producto = ttk.Button(sidebar_frame, text="Agregar Producto", 
+                                     command=lambda: agregar_producto(ventana_raiz), 
+                                     style="Custom.TButton")
     btn_agregar_producto.pack(pady=5, padx=10)
 
-    btn_gestionar_proveedores = ttk.Button(sidebar_frame, text="Gestionar Proveedores", command=gestionar_proveedores, style="Custom.TButton")
+    btn_gestionar_proveedores = ttk.Button(sidebar_frame, text="Gestionar Proveedores", 
+                                          command=lambda: gestionar_proveedores(ventana_raiz), 
+                                          style="Custom.TButton")
     btn_gestionar_proveedores.pack(pady=5, padx=10)
 
-    btn_gestionar_clientes = ttk.Button(sidebar_frame, text="Gestionar Clientes", command=gestionar_clientes, style="Custom.TButton")
+    btn_gestionar_clientes = ttk.Button(sidebar_frame, text="Gestionar Clientes", 
+                                       command=lambda: gestionar_clientes(ventana_raiz), 
+                                       style="Custom.TButton")
     btn_gestionar_clientes.pack(pady=5, padx=10)
 
-    btn_gestionar_empleados = ttk.Button(sidebar_frame, text="Gestionar Empleados", command=gestionar_empleados, style="Custom.TButton")
+    btn_gestionar_empleados = ttk.Button(sidebar_frame, text="Gestionar Empleados", 
+                                        command=lambda: gestionar_empleados(ventana_raiz), 
+                                        style="Custom.TButton")
     btn_gestionar_empleados.pack(pady=5, padx=10)
 
-    btn_registrar_venta = ttk.Button(sidebar_frame, text="Registrar Venta", command=registrar_venta, style="Custom.TButton")
+    btn_registrar_venta = ttk.Button(sidebar_frame, text="Registrar Venta", 
+                                    command=lambda: registrar_venta(ventana_raiz), 
+                                    style="Custom.TButton")
     btn_registrar_venta.pack(pady=5, padx=10)
 
-    btn_generar_reportes = ttk.Button(sidebar_frame, text="Generar Reportes", command=generar_reportes, style="Custom.TButton")
+    btn_generar_reportes = ttk.Button(sidebar_frame, text="Generar Reportes", 
+                                     command=lambda: generar_reportes(ventana_raiz), 
+                                     style="Custom.TButton")
     btn_generar_reportes.pack(pady=5, padx=10)
 
     separator = ttk.Separator(sidebar_frame, orient="horizontal")
     separator.pack(fill="x", pady=10, padx=10)
 
-    btn_cerrar_sesion = ttk.Button(sidebar_frame, text="Cerrar Sesión", command=lambda: cerrar_sesion(ventana_raiz), style="Custom.TButton")
+    btn_cerrar_sesion = ttk.Button(sidebar_frame, text="Cerrar Sesión", 
+                                  command=lambda: cerrar_sesion(ventana_raiz), 
+                                  style="Custom.TButton")
     btn_cerrar_sesion.pack(pady=5, padx=10)
 
     def cerrar_sesion(ventana_raiz):
@@ -223,123 +348,330 @@ def mostrar_ventana_principal(ventana_raiz):
             ventana_raiz.withdraw()
             ventana_inicio_sesion(ventana_raiz)
 
-# Reemplazar la función actualizar_resumen en ui.py
-def actualizar_resumen(summary_frame, canvas_widget=None):
+def actualizar_resumen(summary_frame):
     try:
+        print("Iniciando actualización del resumen...")
         db = conectar_db()
         cursor = db.cursor()
 
         # Total de productos
         cursor.execute("SELECT COUNT(*) FROM productos")
         total_productos = cursor.fetchone()[0]
+        print(f"Total productos: {total_productos}")
 
         # Stock total
         cursor.execute("SELECT SUM(stock) FROM productos")
         total_stock = cursor.fetchone()[0] or 0
+        print(f"Total stock: {total_stock}")
 
         # Total de ventas
         cursor.execute("SELECT COUNT(*) FROM pedidos")
         total_ventas = cursor.fetchone()[0]
+        print(f"Total ventas: {total_ventas}")
 
         # Total de ingresos
         cursor.execute("SELECT SUM(total) FROM pedidos")
         total_ingresos = cursor.fetchone()[0] or 0.0
+        print(f"Total ingresos: {total_ingresos}")
 
-        # Productos con bajo stock (stock < 5) - Obtener detalles
+        # Productos con bajo stock (stock < 5)
         cursor.execute("SELECT nombre, stock FROM productos WHERE stock < 5")
         productos_bajo_stock = cursor.fetchall()
         bajo_stock = len(productos_bajo_stock)
+        print(f"Productos con bajo stock: {bajo_stock}")
 
-        # Crear el texto para el tooltip
-        if bajo_stock > 0:
-            tooltip_text = "\n".join([f"{nombre}: {stock} unidades" for nombre, stock in productos_bajo_stock])
-        else:
-            tooltip_text = "No hay productos con bajo stock."
+        # Buscar el frame de contenido del resumen
+        summary_content = None
+        for widget in summary_frame.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                summary_content = widget
+                break
 
-        # Última venta (fecha y monto)
-        cursor.execute("SELECT fecha, total FROM pedidos ORDER BY fecha DESC LIMIT 1")
-        ultima_venta = cursor.fetchone()
-        if ultima_venta:
-            fecha_ultima_venta, monto_ultima_venta = ultima_venta
-        else:
-            fecha_ultima_venta, monto_ultima_venta = "N/A", 0.0
+        if not summary_content:
+            print("No se encontró el frame de contenido del resumen")
+            return
 
-        # Datos para el gráfico: Número de ventas por día
-        cursor.execute("SELECT DATE(fecha) as fecha, COUNT(*) as num_ventas FROM pedidos GROUP BY DATE(fecha) ORDER BY num_ventas DESC")
-        ventas_por_dia = cursor.fetchall()
+        # Buscar el frame de métricas
+        metrics_frame = None
+        for widget in summary_content.winfo_children():
+            if isinstance(widget, ttk.Frame) and len(widget.winfo_children()) > 0:
+                # Verificar si este frame contiene las métricas
+                first_child = widget.winfo_children()[0]
+                if isinstance(first_child, ttk.Frame):
+                    metrics_frame = widget
+                    break
+
+        if not metrics_frame:
+            print("No se encontró el frame de métricas")
+            return
+
+        print("Frame de métricas encontrado")
+
+        # Actualizar cada métrica
+        for metric_frame in metrics_frame.winfo_children():
+            if not isinstance(metric_frame, ttk.Frame):
+                continue
+
+            # Buscar el título y el valor en este frame
+            title_label = None
+            value_label = None
+            
+            for label in metric_frame.winfo_children():
+                if isinstance(label, ttk.Label):
+                    if "Total Productos" in label.cget("text"):
+                        value_label = metric_frame.winfo_children()[-1]  # El último label es el valor
+                        value_label.configure(text=str(total_productos))
+                        print(f"Actualizado Total Productos: {total_productos}")
+                        break
+                    elif "Stock Total" in label.cget("text"):
+                        value_label = metric_frame.winfo_children()[-1]
+                        value_label.configure(text=str(total_stock))
+                        print(f"Actualizado Stock Total: {total_stock}")
+                        break
+                    elif "Total Ventas" in label.cget("text"):
+                        value_label = metric_frame.winfo_children()[-1]
+                        value_label.configure(text=str(total_ventas))
+                        print(f"Actualizado Total Ventas: {total_ventas}")
+                        break
+                    elif "Total Ingresos" in label.cget("text"):
+                        value_label = metric_frame.winfo_children()[-1]
+                        value_label.configure(text=f"${total_ingresos:,.2f}")
+                        print(f"Actualizado Total Ingresos: ${total_ingresos:,.2f}")
+                        break
+                    elif "Bajo Stock" in label.cget("text"):
+                        value_label = metric_frame.winfo_children()[-1]
+                        value_label.configure(text=str(bajo_stock))
+                        print(f"Actualizado Bajo Stock: {bajo_stock}")
+                        break
+
+        # Actualizar el gráfico
+        chart_frame = None
+        for widget in summary_content.winfo_children():
+            if isinstance(widget, ttk.LabelFrame) and "Gráfico de Ventas" in widget.cget("text"):
+                chart_frame = widget
+                break
+
+        if chart_frame:
+            print("Actualizando gráfico...")
+            # Limpiar el frame del gráfico
+            for widget in chart_frame.winfo_children():
+                widget.destroy()
+
+            # Datos para el gráfico
+            cursor.execute("""
+                SELECT DATE(fecha) as fecha, COUNT(*) as num_ventas 
+                FROM pedidos 
+                GROUP BY DATE(fecha) 
+                ORDER BY fecha DESC 
+                LIMIT 7
+            """)
+            ventas_por_dia = cursor.fetchall()
+            print(f"Datos de ventas obtenidos: {ventas_por_dia}")
+
+            # Crear el gráfico
+            fig, ax = plt.subplots(figsize=(5, 2), dpi=100)
+            fig.patch.set_facecolor('#263238')
+            ax.set_facecolor('#263238')
+
+            if ventas_por_dia:
+                fechas = [str(row[0]) for row in ventas_por_dia]
+                num_ventas = [row[1] for row in ventas_por_dia]
+                print(f"Fechas: {fechas}")
+                print(f"Número de ventas: {num_ventas}")
+
+                # Crear una lista de colores con tonos más suaves
+                colores = ["#64B5F6" if i == 0 else "#2196F3" for i in range(len(fechas))]
+
+                # Generar el gráfico
+                ax.bar(fechas, num_ventas, color=colores)
+                ax.set_title("Número de Ventas por Día", fontsize=10, color="#E0E0E0")
+                ax.set_xlabel("Fecha", fontsize=8, color="#E0E0E0")
+                ax.set_ylabel("Número de Ventas", fontsize=8, color="#E0E0E0")
+                plt.xticks(rotation=45, fontsize=6, color="#E0E0E0")
+                plt.yticks(fontsize=6, color="#E0E0E0")
+                
+                # Agregar grid con color suave
+                ax.grid(True, linestyle='--', alpha=0.3, color='#E0E0E0')
+                
+                plt.tight_layout()
+                print("Gráfico generado con datos")
+            else:
+                ax.text(0.5, 0.5, "No hay datos de ventas", 
+                       horizontalalignment="center", 
+                       verticalalignment="center", 
+                       fontsize=10,
+                       color="#E0E0E0")
+                ax.set_xticks([])
+                ax.set_yticks([])
+                print("No hay datos para el gráfico")
+
+            # Integrar el gráfico en Tkinter
+            canvas = FigureCanvasTkAgg(fig, master=chart_frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill="both", expand=True)
+            print("Gráfico integrado en la interfaz")
 
         db.close()
-
-        # Limpiar el contenido actual del summary_frame
-        for widget in summary_frame.winfo_children():
-            widget.destroy()
-
-        # Frame para las métricas
-        metrics_frame = ttk.Frame(summary_frame, style="Summary.TFrame")
-        metrics_frame.pack(fill="x", pady=5)
-
-        # Mostrar las métricas con emojis y separadores
-        ttk.Label(metrics_frame, text=f"📦 Total de Productos: {total_productos}", style="Summary.TLabel", background="#263238").pack(anchor="w", padx=10, pady=2)
-        ttk.Separator(metrics_frame, orient="horizontal").pack(fill="x", pady=5)
-        ttk.Label(metrics_frame, text=f"📏 Stock Total: {total_stock}", style="Summary.TLabel", background="#263238").pack(anchor="w", padx=10, pady=2)
-        ttk.Separator(metrics_frame, orient="horizontal").pack(fill="x", pady=5)
-        ttk.Label(metrics_frame, text=f"🛒 Total de Ventas: {total_ventas}", style="Summary.TLabel", background="#263238").pack(anchor="w", padx=10, pady=2)
-        ttk.Separator(metrics_frame, orient="horizontal").pack(fill="x", pady=5)
-        ttk.Label(metrics_frame, text=f"💰 Total de Ingresos: ${total_ingresos:.2f}", style="Summary.TLabel", background="#263238").pack(anchor="w", padx=10, pady=2)
-        ttk.Separator(metrics_frame, orient="horizontal").pack(fill="x", pady=5)
-
-        # Etiqueta de productos con bajo stock con tooltip
-        bajo_stock_label = ttk.Label(metrics_frame, text=f"⚠️ Productos con Bajo Stock: {bajo_stock}", style="Summary.TLabel", background="#263238")
-        bajo_stock_label.pack(anchor="w", padx=10, pady=2)
-
-        # Crear el tooltip y vincularlo a los eventos
-        tooltip = Tooltip(bajo_stock_label, tooltip_text)
-        bajo_stock_label.bind("<Enter>", lambda e: tooltip.show())
-        bajo_stock_label.bind("<Leave>", lambda e: tooltip.hide())
-
-        # Etiqueta de última venta
-        ttk.Separator(metrics_frame, orient="horizontal").pack(fill="x", pady=5)
-        ttk.Label(metrics_frame, text=f"🕒 Última Venta: {fecha_ultima_venta} - ${monto_ultima_venta:.2f}", style="Summary.TLabel", background="#263238").pack(anchor="w", padx=10, pady=2)
-
-        # Frame para el gráfico
-        chart_frame = ttk.Frame(summary_frame)
-        chart_frame.pack(fill="both", expand=True, pady=10)
-
-        # Crear el gráfico de número de ventas por día
-        fig, ax = plt.subplots(figsize=(5, 2), dpi=100)
-        fig.patch.set_facecolor('#263238')  
-        ax.set_facecolor('#37474F')
-        if ventas_por_dia:
-            fechas = [str(row[0]) for row in ventas_por_dia]
-            num_ventas = [row[1] for row in ventas_por_dia]
-
-            # Crear una lista de colores: el día con más ventas (primera barra) será #42A5F5, las demás #1976D2
-            colores = ["#42A5F5" if i == 0 else "#1976D2" for i in range(len(fechas))]
-
-            # Generar el gráfico con colores diferenciados
-            ax.bar(fechas, num_ventas, color=colores)
-            ax.set_title("Número de Ventas por Día", fontsize=10, color="#0D47A1")
-            ax.set_xlabel("Fecha", fontsize=8)
-            ax.set_ylabel("Número de Ventas", fontsize=8)
-            plt.xticks(rotation=45, fontsize=6)
-            plt.yticks(fontsize=6)
-            plt.tight_layout()
-        else:
-            ax.text(0.5, 0.5, "No hay datos de ventas", horizontalalignment="center", verticalalignment="center", fontsize=10)
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-        # Si ya existe un canvas, destruirlo para evitar superposición
-        if canvas_widget:
-            canvas_widget.destroy()
-
-        # Integrar el gráfico en Tkinter
-        canvas = FigureCanvasTkAgg(fig, master=chart_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-
-        return canvas.get_tk_widget()
+        print("Actualización del resumen completada")
 
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo actualizar el resumen: {e}")
-        return None
+        print(f"Error en actualizar_resumen: {e}")
+        # Para debugging más detallado
+        import traceback
+        traceback.print_exc()
+
+def ventana_registro(ventana_raiz):
+    registro_window = tk.Toplevel(ventana_raiz)
+    registro_window.title("Registro de Usuario")
+    registro_window.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(registro_window, ventana_raiz))
+    registro_window.config(bg="#263238")
+
+    ventana_ancho = 400
+    ventana_alto = 550  # Aumentado para el nuevo campo
+    pantalla_ancho = registro_window.winfo_screenwidth()
+    pantalla_alto = registro_window.winfo_screenheight()
+    x = (pantalla_ancho // 2) - (ventana_ancho // 2)
+    y = (pantalla_alto // 2) - (ventana_alto // 2)
+    registro_window.geometry(f"{ventana_ancho}x{ventana_alto}+{x}+{y}")
+
+    aplicar_estilo_login()
+
+    frame = ttk.Frame(registro_window)
+    frame.pack(padx=20, pady=20, fill="both", expand=True)
+
+    header_label = ttk.Label(frame, text="Registro de Usuario", style="Header.TLabel")
+    header_label.pack(pady=(0, 10))
+
+    ttk.Label(frame, text="Nombre Completo:").pack()
+    entry_nombre = ttk.Entry(frame)
+    entry_nombre.pack(fill="x", pady=5)
+
+    ttk.Label(frame, text="Nombre de Usuario:").pack()
+    entry_usuario = ttk.Entry(frame)
+    entry_usuario.pack(fill="x", pady=5)
+
+    ttk.Label(frame, text="Correo Electrónico:").pack()
+    entry_correo = ttk.Entry(frame)
+    entry_correo.pack(fill="x", pady=5)
+
+    ttk.Label(frame, text="Contraseña:").pack()
+    entry_contrasena = ttk.Entry(frame, show="*")
+    entry_contrasena.pack(fill="x", pady=5)
+
+    # Crear frame para contraseña y su ícono de información
+    frame_password = ttk.Frame(frame)
+    frame_password.pack(fill="x", pady=0)
+
+    # Ícono de información
+    info_label = ttk.Label(frame_password, text="ℹ️", cursor="hand2")
+    info_label.pack(side="left", padx=5)
+
+    # Crear tooltip para los requisitos de contraseña
+    requisitos_texto = ("La contraseña debe tener:\n" +
+                      "• Mínimo 8 caracteres\n" +
+                      "• Una letra mayúscula\n" +
+                      "• Una letra minúscula\n" +
+                      "• Un número\n" +
+                      "• Un carácter especial")
+    
+    tooltip_requisitos = Tooltip(info_label, requisitos_texto)
+    info_label.bind("<Enter>", lambda e: tooltip_requisitos.show())
+    info_label.bind("<Leave>", lambda e: tooltip_requisitos.hide())
+
+    ttk.Label(frame, text="Confirmar Contraseña:").pack()
+    entry_confirmar = ttk.Entry(frame, show="*")
+    entry_confirmar.pack(fill="x", pady=5)
+
+    ttk.Label(frame, text="Rol:").pack()
+    rol_var = tk.StringVar(value="empleado")
+    frame_roles = ttk.Frame(frame)
+    frame_roles.pack(fill="x", pady=5)
+    
+    ttk.Radiobutton(frame_roles, text="Administrador", variable=rol_var, value="admin").pack(side="left", padx=5)
+    ttk.Radiobutton(frame_roles, text="Empleado", variable=rol_var, value="empleado").pack(side="left", padx=5)
+
+    def validar_contraseña(password):
+        if len(password) < 8:
+            return False, "La contraseña debe tener al menos 8 caracteres"
+        if not any(c.isupper() for c in password):
+            return False, "La contraseña debe contener al menos una letra mayúscula"
+        if not any(c.islower() for c in password):
+            return False, "La contraseña debe contener al menos una letra minúscula"
+        if not any(c.isdigit() for c in password):
+            return False, "La contraseña debe contener al menos un número"
+        if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+            return False, "La contraseña debe contener al menos un carácter especial"
+        return True, ""
+
+    def validar_correo(correo):
+        import re
+        patron = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(patron, correo))
+
+    def registrar_usuario():
+        nombre = entry_nombre.get().strip()
+        username = entry_usuario.get().strip()
+        correo = entry_correo.get().strip()
+        password = entry_contrasena.get().strip()
+        confirmar = entry_confirmar.get().strip()
+        rol = rol_var.get()
+
+        if not nombre or not username or not correo or not password or not confirmar:
+            messagebox.showwarning("Advertencia", "Por favor, complete todos los campos.")
+            return
+
+        if not validar_correo(correo):
+            messagebox.showwarning("Advertencia", "Por favor, ingrese un correo electrónico válido.")
+            return
+
+        es_valida, mensaje = validar_contraseña(password)
+        if not es_valida:
+            messagebox.showwarning("Advertencia", mensaje)
+            return
+
+        if password != confirmar:
+            messagebox.showwarning("Advertencia", "Las contraseñas no coinciden.")
+            return
+
+        try:
+            db = conectar_db()
+            cursor = db.cursor()
+            
+            # Verificar si el usuario ya existe
+            cursor.execute("SELECT username FROM usuarios WHERE username = %s", (username,))
+            if cursor.fetchone():
+                messagebox.showerror("Error", "El nombre de usuario ya existe.")
+                return
+
+            # Verificar si el correo ya existe
+            cursor.execute("SELECT email FROM usuarios WHERE email = %s", (correo,))
+            if cursor.fetchone():
+                messagebox.showerror("Error", "El correo electrónico ya está registrado.")
+                return
+
+            # Hashear la contraseña
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
+            # Insertar el nuevo usuario
+            cursor.execute(
+                "INSERT INTO usuarios (username, nombre, email, password, rol) VALUES (%s, %s, %s, %s, %s)",
+                (username, nombre, correo, hashed_password, rol)
+            )
+            db.commit()
+            db.close()
+
+            messagebox.showinfo("Éxito", "Usuario registrado exitosamente.")
+            registro_window.destroy()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al registrar usuario: {e}")
+
+    frame_botones = ttk.Frame(frame)
+    frame_botones.pack(fill="x", pady=10)
+
+    btn_registrar = ttk.Button(frame_botones, text="Registrar", command=registrar_usuario, style="Custom.TButton")
+    btn_registrar.pack(side="left", padx=5)
+
+    btn_cancelar = ttk.Button(frame_botones, text="Cancelar", command=registro_window.destroy, style="Custom.TButton")
+    btn_cancelar.pack(side="right", padx=5)

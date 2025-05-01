@@ -7,15 +7,31 @@ USE inventario_facturacion;
 CREATE TABLE usuarios (
   usuario_id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(50) NOT NULL UNIQUE,
+  nombre VARCHAR(100) NOT NULL,
   password VARCHAR(255) NOT NULL,  -- Almacenar contraseñas hasheadas
-  rol ENUM('admin', 'empleado') NOT NULL
+  rol ENUM('admin', 'empleado') NOT NULL,
+  email VARCHAR(100) NULL,
+  telefono VARCHAR(20)
 ) ENGINE=InnoDB;
 
 -- Datos de ejemplo para usuarios (contraseñas hasheadas con bcrypt)
 -- Las contraseñas reales son: admin123 y empleado123
-INSERT INTO usuarios (username, password, rol) VALUES
-('andrea', '$2b$12$3.XkY9vJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5', 'admin'),
-('pedro', '$2b$12$9.YkY9vJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5', 'empleado');
+INSERT INTO usuarios (username, nombre, password, rol, telefono) VALUES
+('andrea', 'Andrea López', '$2b$12$3.XkY9vJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5', 'admin', '+57 3101234567'),
+('pedro', 'Pedro Jiménez', '$2b$12$9.YkY9vJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5Z2xWvKzZ8eZ5z5wJ8bY5', 'empleado', '+57 3112345678');
+
+-- Actualizar los usuarios existentes con correos de ejemplo
+UPDATE usuarios 
+SET email = 'andrea@admin.com' 
+WHERE username = 'andrea';
+
+UPDATE usuarios 
+SET email = 'pedro@empleado.com' 
+WHERE username = 'pedro';
+
+-- Ahora que todos los registros tienen email, hacer la columna NOT NULL
+ALTER TABLE usuarios
+MODIFY COLUMN email VARCHAR(100) NOT NULL UNIQUE;
 
 -- Tabla: proveedores
 CREATE TABLE proveedores (
@@ -53,20 +69,6 @@ INSERT INTO clientes (nombre, direccion, telefono, email, cedula) VALUES
 ('Carlos Rodríguez', 'Av. Caracas #20-30, Bogotá', '+57 3204567891', 'carlosr@gmail.com', '1234567890'),
 ('María Fernández', 'Calle 5 #12-15, Cali', '+57 3123456789', 'mariaf@hotmail.com', '0987654321');
 
--- Tabla: empleados
-CREATE TABLE empleados (
-  empleado_id INT AUTO_INCREMENT PRIMARY KEY,
-  nombre VARCHAR(100) NOT NULL,
-  cargo VARCHAR(50),
-  telefono VARCHAR(20),
-  email VARCHAR(100)
-) ENGINE=InnoDB;
-
--- Datos de ejemplo para empleados
-INSERT INTO empleados (nombre, cargo, telefono, email) VALUES
-('Andrea López', 'admin', '+57 3101234567', 'andreal@xcompany.com'),
-('Pedro Jiménez', 'empleado', '+57 3112345678', 'pedroj@xcompany.com');
-
 -- Tabla: productos
 CREATE TABLE productos (
   producto_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,7 +95,7 @@ INSERT INTO productos (nombre, categoria, descripcion, precio, stock, proveedor_
 CREATE TABLE pedidos (
   pedido_id INT AUTO_INCREMENT PRIMARY KEY,
   cliente_id INT,
-  empleado_id INT,
+  usuario_id INT,  -- Cambiado de empleado_id a usuario_id
   fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
   total DECIMAL(10,2),
   nombre_cliente_no_registrado VARCHAR(100),
@@ -101,8 +103,8 @@ CREATE TABLE pedidos (
   CONSTRAINT fk_pedido_cliente FOREIGN KEY (cliente_id)
     REFERENCES clientes(cliente_id)
     ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT fk_pedido_empleado FOREIGN KEY (empleado_id)
-    REFERENCES empleados(empleado_id)
+  CONSTRAINT fk_pedido_usuario FOREIGN KEY (usuario_id)  -- Cambiada la referencia a usuarios
+    REFERENCES usuarios(usuario_id)
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 

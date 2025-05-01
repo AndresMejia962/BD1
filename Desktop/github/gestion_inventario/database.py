@@ -41,12 +41,12 @@ def obtener_empleados():
     try:
         db = conectar_db()
         cursor = db.cursor()
-        cursor.execute("SELECT empleado_id, nombre FROM empleados")
+        cursor.execute("SELECT usuario_id, nombre FROM usuarios")
         empleados = cursor.fetchall()
         db.close()
         return empleados
     except Exception as e:
-        messagebox.showerror("Error", f"No se pudo obtener los empleados: {e}")
+        print(f"Error al obtener empleados: {e}")
         return []
 
 # Función para obtener los productos

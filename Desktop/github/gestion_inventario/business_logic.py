@@ -8,12 +8,30 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+import sys
 
 global usuario_rol
 
+def cerrar_ventana(ventana):
+    if isinstance(ventana, tk.Tk):  # Si es la ventana principal
+        ventana.quit()  # Termina el bucle principal
+        ventana.destroy()  # Destruye la ventana
+        sys.exit()  # Cierra la aplicación
+    else:  # Si es una ventana secundaria
+        if hasattr(ventana, 'master') and ventana.master:
+            ventana.master.deiconify()  # Mostrar la ventana padre
+        ventana.destroy()  # Cerrar solo esta ventana
+
+def cerrar_ventana_secundaria(ventana_secundaria, ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.deiconify()  # Mostrar la ventana principal
+    ventana_secundaria.destroy()  # Cerrar la ventana secundaria
 
 # Función para consultar productos
-def consultar_productos():
+def consultar_productos(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     try:
         db = conectar_db()
         cursor = db.cursor()
@@ -28,7 +46,10 @@ def consultar_productos():
         ventana_productos = tk.Toplevel()
         ventana_productos.title("Lista de Productos")
         ventana_productos.geometry("900x500")
-        ventana_productos.config(bg="#263238")  # Corregido el color de fondo
+        ventana_productos.config(bg="#263238")
+
+        # Configurar el protocolo de cierre
+        ventana_productos.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_productos, ventana_principal))
 
         frame_filtro = ttk.Frame(ventana_productos)
         frame_filtro.pack(fill="x", padx=10, pady=5)
@@ -184,14 +205,16 @@ def consultar_productos():
                     messagebox.showinfo("Éxito", "Producto actualizado correctamente")
                     ventana_actualizar.destroy()
                     ventana_productos.destroy()
-                    consultar_productos()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    consultar_productos(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo actualizar: {e}")
 
             btn_guardar = ttk.Button(frame, text="Guardar Cambios", command=guardar_cambios, style="Custom.TButton")
             btn_guardar.pack(pady=10)
 
-            btn_cancelar = ttk.Button(frame, text="Cancelar", command=ventana_actualizar.destroy, style="Custom.TButton")
+            btn_cancelar = ttk.Button(frame, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_actualizar, ventana_principal), style="Custom.TButton")
             btn_cancelar.pack(pady=5)
 
         def eliminar_producto():
@@ -215,7 +238,9 @@ def consultar_productos():
 
                 messagebox.showinfo("Éxito", "Producto eliminado correctamente")
                 ventana_productos.destroy()
-                consultar_productos()
+                if ventana_principal:
+                    ventana_principal.deiconify()
+                consultar_productos(ventana_principal)
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo eliminar: {e}")
 
@@ -225,14 +250,25 @@ def consultar_productos():
         btn_eliminar = ttk.Button(frame_acciones, text="Eliminar Producto", command=eliminar_producto, style="Custom.TButton")
         btn_eliminar.pack(side="left", padx=5)
 
-        btn_cerrar = ttk.Button(ventana_productos, text="Cerrar", command=ventana_productos.destroy, style="Custom.TButton")
+        btn_cerrar = ttk.Button(ventana_productos, text="Cerrar", command=lambda: cerrar_ventana_secundaria(ventana_productos, ventana_principal), style="Custom.TButton")
         btn_cerrar.pack(pady=10)
 
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo consultar: {e}")
 
 # Función para agregar un producto
-def agregar_producto():
+def agregar_producto(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
+    ventana_agregar = tk.Toplevel()
+    ventana_agregar.title("Agregar Producto")
+    ventana_agregar.geometry("300x400")
+    ventana_agregar.configure(bg="#263238")
+
+    # Configurar el protocolo de cierre
+    ventana_agregar.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_agregar, ventana_principal))
+
     def guardar():
         nombre = entry_nombre.get().strip()
         categoria = entry_categoria.get().strip()
@@ -271,13 +307,10 @@ def agregar_producto():
             messagebox.showinfo("Éxito", "Producto agregado correctamente")
             db.close()
             ventana_agregar.destroy()
+            if ventana_principal:
+                ventana_principal.deiconify()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo agregar el producto: {e}")
-
-    ventana_agregar = tk.Toplevel()
-    ventana_agregar.title("Agregar Producto")
-    ventana_agregar.geometry("300x400")
-    ventana_agregar.configure(bg="#263238")
 
     frame = ttk.Frame(ventana_agregar)
     frame.pack(padx=10, pady=10, fill="both", expand=True)
@@ -318,10 +351,14 @@ def agregar_producto():
 
 
 # Función para gestionar proveedores
-def gestionar_proveedores():
-   
+def gestionar_proveedores(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     if config.usuario_rol != "admin":
         messagebox.showwarning("Acceso Denegado", "Solo los administradores pueden gestionar proveedores.")
+        if ventana_principal:
+            ventana_principal.deiconify()
         return
 
     try:
@@ -335,6 +372,9 @@ def gestionar_proveedores():
         ventana_proveedores.title("Gestión de Proveedores")
         ventana_proveedores.geometry("900x500")
         ventana_proveedores.config(bg="#263238")
+
+        # Configurar el protocolo de cierre
+        ventana_proveedores.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_proveedores, ventana_principal))
 
         frame_filtro = ttk.Frame(ventana_proveedores)
         frame_filtro.pack(fill="x", padx=10, pady=5)
@@ -423,7 +463,9 @@ def gestionar_proveedores():
                     messagebox.showinfo("Éxito", "Proveedor agregado correctamente")
                     ventana_agregar.destroy()
                     ventana_proveedores.destroy()
-                    gestionar_proveedores()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_proveedores(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo agregar el proveedor: {e}")
 
@@ -539,14 +581,16 @@ def gestionar_proveedores():
                     messagebox.showinfo("Éxito", "Proveedor actualizado correctamente")
                     ventana_actualizar.destroy()
                     ventana_proveedores.destroy()
-                    gestionar_proveedores()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_proveedores(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo actualizar: {e}")
 
             btn_guardar = ttk.Button(frame, text="Guardar Cambios", command=guardar_cambios, style="Custom.TButton")
             btn_guardar.pack(pady=10)
 
-            btn_cancelar = ttk.Button(frame, text="Cancelar", command=ventana_actualizar.destroy, style="Custom.TButton")
+            btn_cancelar = ttk.Button(frame, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_actualizar, ventana_principal), style="Custom.TButton")
             btn_cancelar.pack(pady=5)
 
         def eliminar_proveedor():
@@ -570,7 +614,9 @@ def gestionar_proveedores():
 
                 messagebox.showinfo("Éxito", "Proveedor eliminado correctamente")
                 ventana_proveedores.destroy()
-                gestionar_proveedores()
+                if ventana_principal:
+                    ventana_principal.deiconify()
+                gestionar_proveedores(ventana_principal)
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo eliminar: {e}. Es posible que este proveedor esté asociado a productos.")
 
@@ -583,17 +629,21 @@ def gestionar_proveedores():
         btn_eliminar = ttk.Button(frame_acciones, text="Eliminar Proveedor", command=eliminar_proveedor, style="Custom.TButton")
         btn_eliminar.pack(side="left", padx=5)
 
-        btn_cerrar = ttk.Button(ventana_proveedores, text="Cerrar", command=ventana_proveedores.destroy, style="Custom.TButton")
+        btn_cerrar = ttk.Button(ventana_proveedores, text="Cerrar", command=lambda: cerrar_ventana_secundaria(ventana_proveedores, ventana_principal), style="Custom.TButton")
         btn_cerrar.pack(pady=10)
 
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo consultar los proveedores: {e}")
 
 # Función para gestionar clientes
-def gestionar_clientes():
-    
+def gestionar_clientes(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     if config.usuario_rol != "admin":
         messagebox.showwarning("Acceso Denegado", "Solo los administradores pueden gestionar clientes.")
+        if ventana_principal:
+            ventana_principal.deiconify()
         return
 
     try:
@@ -607,6 +657,9 @@ def gestionar_clientes():
         ventana_clientes.title("Gestión de Clientes")
         ventana_clientes.geometry("900x500")
         ventana_clientes.config(bg="#263238")
+
+        # Configurar el protocolo de cierre
+        ventana_clientes.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_clientes, ventana_principal))
 
         frame_filtro = ttk.Frame(ventana_clientes)
         frame_filtro.pack(fill="x", padx=10, pady=5)
@@ -701,7 +754,9 @@ def gestionar_clientes():
                     messagebox.showinfo("Éxito", "Cliente agregado correctamente")
                     ventana_agregar.destroy()
                     ventana_clientes.destroy()
-                    gestionar_clientes()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_clientes(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo agregar el cliente: {e}")
 
@@ -736,7 +791,7 @@ def gestionar_clientes():
             btn_guardar = ttk.Button(frame, text="Guardar", command=guardar, style="Custom.TButton")
             btn_guardar.pack(pady=10)
 
-            btn_cancelar = ttk.Button(frame, text="Cancelar", command=ventana_agregar.destroy, style="Custom.TButton")
+            btn_cancelar = ttk.Button(frame, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_agregar, ventana_principal), style="Custom.TButton")
             btn_cancelar.pack(pady=5)
 
         def actualizar_cliente():
@@ -823,14 +878,16 @@ def gestionar_clientes():
                     messagebox.showinfo("Éxito", "Cliente actualizado correctamente")
                     ventana_actualizar.destroy()
                     ventana_clientes.destroy()
-                    gestionar_clientes()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_clientes(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo actualizar: {e}")
 
             btn_guardar = ttk.Button(frame, text="Guardar Cambios", command=guardar_cambios, style="Custom.TButton")
             btn_guardar.pack(pady=10)
 
-            btn_cancelar = ttk.Button(frame, text="Cancelar", command=ventana_actualizar.destroy, style="Custom.TButton")
+            btn_cancelar = ttk.Button(frame, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_actualizar, ventana_principal), style="Custom.TButton")
             btn_cancelar.pack(pady=5)
 
         def eliminar_cliente():
@@ -854,7 +911,9 @@ def gestionar_clientes():
 
                 messagebox.showinfo("Éxito", "Cliente eliminado correctamente")
                 ventana_clientes.destroy()
-                gestionar_clientes()
+                if ventana_principal:
+                    ventana_principal.deiconify()
+                gestionar_clientes(ventana_principal)
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo eliminar: {e}. Es posible que este cliente esté asociado a pedidos.")
 
@@ -867,16 +926,21 @@ def gestionar_clientes():
         btn_eliminar = ttk.Button(frame_acciones, text="Eliminar Cliente", command=eliminar_cliente, style="Custom.TButton")
         btn_eliminar.pack(side="left", padx=5)
 
-        btn_cerrar = ttk.Button(ventana_clientes, text="Cerrar", command=ventana_clientes.destroy, style="Custom.TButton")
+        btn_cerrar = ttk.Button(ventana_clientes, text="Cerrar", command=lambda: cerrar_ventana_secundaria(ventana_clientes, ventana_principal), style="Custom.TButton")
         btn_cerrar.pack(pady=10)
 
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo consultar los clientes: {e}")
 
 # Función para gestionar empleados
-def gestionar_empleados():
+def gestionar_empleados(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     if config.usuario_rol != "admin":
         messagebox.showwarning("Acceso Denegado", "Solo los administradores pueden gestionar empleados.")
+        if ventana_principal:
+            ventana_principal.deiconify()
         return
 
     try:
@@ -890,6 +954,9 @@ def gestionar_empleados():
         ventana_empleados.title("Gestión de Empleados")
         ventana_empleados.geometry("900x500")
         ventana_empleados.config(bg="#263238")
+
+        # Configurar el protocolo de cierre
+        ventana_empleados.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_empleados, ventana_principal))
 
         frame_filtro = ttk.Frame(ventana_empleados)
         frame_filtro.pack(fill="x", padx=10, pady=5)
@@ -979,7 +1046,9 @@ def gestionar_empleados():
                     messagebox.showinfo("Éxito", "Empleado agregado correctamente")
                     ventana_agregar.destroy()
                     ventana_empleados.destroy()
-                    gestionar_empleados()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_empleados(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo agregar el empleado: {e}")
 
@@ -1087,14 +1156,16 @@ def gestionar_empleados():
                     messagebox.showinfo("Éxito", "Empleado actualizado correctamente")
                     ventana_actualizar.destroy()
                     ventana_empleados.destroy()
-                    gestionar_empleados()
+                    if ventana_principal:
+                        ventana_principal.deiconify()
+                    gestionar_empleados(ventana_principal)
                 except Exception as e:
                     messagebox.showerror("Error", f"No se pudo actualizar: {e}")
 
             btn_guardar = ttk.Button(frame, text="Guardar Cambios", command=guardar_cambios, style="Custom.TButton")
             btn_guardar.pack(pady=10)
 
-            btn_cancelar = ttk.Button(frame, text="Cancelar", command=ventana_actualizar.destroy, style="Custom.TButton")
+            btn_cancelar = ttk.Button(frame, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_actualizar, ventana_principal), style="Custom.TButton")
             btn_cancelar.pack(pady=5)
 
         def eliminar_empleado():
@@ -1118,7 +1189,9 @@ def gestionar_empleados():
 
                 messagebox.showinfo("Éxito", "Empleado eliminado correctamente")
                 ventana_empleados.destroy()
-                gestionar_empleados()
+                if ventana_principal:
+                    ventana_principal.deiconify()
+                gestionar_empleados(ventana_principal)
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo eliminar: {e}. Es posible que este empleado esté asociado a pedidos.")
 
@@ -1131,21 +1204,20 @@ def gestionar_empleados():
         btn_eliminar = ttk.Button(frame_acciones, text="Eliminar Empleado", command=eliminar_empleado, style="Custom.TButton")
         btn_eliminar.pack(side="left", padx=5)
 
-        btn_cerrar = ttk.Button(ventana_empleados, text="Cerrar", command=ventana_empleados.destroy, style="Custom.TButton")
+        btn_cerrar = ttk.Button(ventana_empleados, text="Cerrar", command=lambda: cerrar_ventana_secundaria(ventana_empleados, ventana_principal), style="Custom.TButton")
         btn_cerrar.pack(pady=10)
 
     except Exception as e:
         messagebox.showerror("Error", f"No se pudo consultar los empleados: {e}")
 
 # Función para registrar una venta
-def registrar_venta():
+def registrar_venta(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     clientes = obtener_clientes()
     cliente_dict = {nombre: cliente_id for cliente_id, nombre in clientes}
     cliente_nombres = list(cliente_dict.keys())
-
-    empleados = obtener_empleados()
-    empleado_dict = {nombre: empleado_id for empleado_id, nombre in empleados}
-    empleado_nombres = list(empleado_dict.keys())
 
     productos = obtener_productos()
     producto_dict = {nombre: (producto_id, precio, stock) for producto_id, nombre, precio, stock in productos}
@@ -1155,6 +1227,9 @@ def registrar_venta():
     ventana_venta.title("Registrar Venta")
     ventana_venta.geometry("800x600")
     ventana_venta.config(bg="#263238")
+
+    # Configurar el protocolo de cierre
+    ventana_venta.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_venta, ventana_principal))
 
     frame_form = ttk.LabelFrame(ventana_venta, text="Datos de la Venta", padding=10, style="Custom.TFrame")
     frame_form.pack(fill="x", padx=10, pady=10)
@@ -1171,13 +1246,9 @@ def registrar_venta():
     entry_cedula_no_registrado = ttk.Entry(frame_form)
     entry_cedula_no_registrado.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
 
-    ttk.Label(frame_form, text="Empleado:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-    combo_empleado = ttk.Combobox(frame_form, values=empleado_nombres, state="readonly")
-    combo_empleado.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
-
-    ttk.Label(frame_form, text="Método de Pago:").grid(row=4, column=0, padx=5, pady=5, sticky="w")
+    ttk.Label(frame_form, text="Método de Pago:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
     combo_metodo_pago = ttk.Combobox(frame_form, values=["Efectivo", "Tarjeta", "Transferencia"], state="readonly")
-    combo_metodo_pago.grid(row=4, column=1, padx=5, pady=5, sticky="ew")
+    combo_metodo_pago.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
 
     frame_form.columnconfigure(1, weight=1)
 
@@ -1254,14 +1325,9 @@ def registrar_venta():
 
     def guardar_venta():
         cliente = combo_cliente.get()
-        empleado = combo_empleado.get()
         metodo_pago = combo_metodo_pago.get()
         nombre_no_registrado = entry_nombre_no_registrado.get().strip()
         cedula_no_registrado = entry_cedula_no_registrado.get().strip()
-
-        if not empleado:
-            messagebox.showwarning("Advertencia", "Por favor, selecciona un empleado.")
-            return
 
         if not metodo_pago:
             messagebox.showwarning("Advertencia", "Por favor, selecciona un método de pago.")
@@ -1272,7 +1338,6 @@ def registrar_venta():
             return
 
         cliente_id = cliente_dict.get(cliente) if cliente else None
-        empleado_id = empleado_dict[empleado]
         total = actualizar_total()
         fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1296,9 +1361,17 @@ def registrar_venta():
             cursor = db.cursor()
 
             cursor.execute("""
-                INSERT INTO pedidos (cliente_id, empleado_id, fecha, total, nombre_cliente_no_registrado, cedula_cliente_no_registrado) 
+                SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
+                FROM pedidos p
+                LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
+                LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
+            """)
+            ventas = cursor.fetchall()
+
+            cursor.execute("""
+                INSERT INTO pedidos (cliente_id, usuario_id, fecha, total, nombre_cliente_no_registrado, cedula_cliente_no_registrado) 
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (cliente_id, empleado_id, fecha, total, nombre_no_registrado, cedula_no_registrado))
+            """, (cliente_id, config.usuario_id, fecha, total, nombre_no_registrado, cedula_no_registrado))
             pedido_id = cursor.lastrowid
 
             for item in tabla.get_children():
@@ -1332,29 +1405,36 @@ def registrar_venta():
                 cliente_mostrar = cliente
             else:
                 cliente_mostrar = f"{nombre_no_registrado} (Cédula: {cedula_no_registrado})" if nombre_no_registrado else "Cliente no registrado"
-            factura_texto = f"Factura: {numero_factura}\nFecha: {fecha}\nCliente: {cliente_mostrar}\nMétodo de Pago: {metodo_pago}\nTotal: ${total:.2f}\n\nDetalles:\n"
+            factura_texto = f"Factura: {numero_factura}\nFecha: {fecha}\nCliente: {cliente_mostrar}\nVendedor: {config.usuario_nombre}\nMétodo de Pago: {metodo_pago}\nTotal: ${total:.2f}\n\nDetalles:\n"
             for item in tabla.get_children():
                 valores = tabla.item(item)['values']
                 factura_texto += f"- {valores[1]}: {valores[2]} x ${valores[3]} = ${valores[4]}\n"
             messagebox.showinfo("Factura Generada", factura_texto)
 
             ventana_venta.destroy()
+            if ventana_principal:
+                ventana_principal.deiconify()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo registrar la venta: {e}")
 
     btn_guardar = ttk.Button(ventana_venta, text="Guardar Venta", command=guardar_venta, style="Custom.TButton")
     btn_guardar.pack(pady=10)
 
-    btn_cancelar = ttk.Button(ventana_venta, text="Cancelar", command=ventana_venta.destroy, style="Custom.TButton")
+    btn_cancelar = ttk.Button(ventana_venta, text="Cancelar", command=lambda: cerrar_ventana_secundaria(ventana_venta, ventana_principal), style="Custom.TButton")
     btn_cancelar.pack(pady=5)
 
 # Función para generar reportes
-def generar_reportes():
+def generar_reportes(ventana_principal=None):
+    if ventana_principal:
+        ventana_principal.withdraw()
+
     ventana_reportes = tk.Toplevel()
     ventana_reportes.title("Generar Reportes")
     ventana_reportes.geometry("800x500")
     ventana_reportes.config(bg="#263238")
-    
+
+    # Configurar el protocolo de cierre
+    ventana_reportes.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana_secundaria(ventana_reportes, ventana_principal))
 
     frame = ttk.Frame(ventana_reportes)
     frame.pack(padx=10, pady=10, fill="both", expand=True)
@@ -1366,18 +1446,19 @@ def generar_reportes():
             db = conectar_db()
             cursor = db.cursor()
             cursor.execute("""
-                SELECT p.pedido_id, p.fecha, c.nombre, e.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
+                SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
                 FROM pedidos p
                 LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
-                LEFT JOIN empleados e ON p.empleado_id = e.empleado_id
+                LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
             """)
             ventas = cursor.fetchall()
             db.close()
 
-            ventana_ventas = tk.Toplevel()
+            ventana_ventas = tk.Toplevel(ventana_reportes)  # Hacer ventana_reportes el padre
             ventana_ventas.title("Reporte de Ventas")
             ventana_ventas.geometry("900x500")
             ventana_ventas.config(bg="#263238")
+            ventana_ventas.transient(ventana_reportes)  # Hacer la ventana dependiente de ventana_reportes
             
 
             columnas = ("ID Pedido", "Fecha", "Cliente", "Empleado", "Total")
@@ -1398,7 +1479,6 @@ def generar_reportes():
 
             tabla.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Frame para los botones de exportación
             frame_exportar = ttk.Frame(ventana_ventas)
             frame_exportar.pack(fill="x", padx=10, pady=5)
 
@@ -1454,7 +1534,7 @@ def generar_reportes():
             btn_exportar_pdf.pack(side="left", padx=5)
 
             btn_cerrar = ttk.Button(ventana_ventas, text="Cerrar", command=ventana_ventas.destroy, style="Custom.TButton")
-            btn_cerrar.pack(side= "bottom", padx=5)
+            btn_cerrar.pack(side="bottom", padx=5)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el reporte: {e}")
@@ -1471,10 +1551,11 @@ def generar_reportes():
             productos = cursor.fetchall()
             db.close()
 
-            ventana_inventario = tk.Toplevel()
+            ventana_inventario = tk.Toplevel(ventana_reportes)  # Hacer ventana_reportes el padre
             ventana_inventario.title("Reporte de Inventario")
             ventana_inventario.geometry("900x500")
             ventana_inventario.config(bg="#263238")
+            ventana_inventario.transient(ventana_reportes)  # Hacer la ventana dependiente de ventana_reportes
             
 
             columnas = ("ID", "Nombre", "Categoría", "Stock", "Precio", "Proveedor")
@@ -1495,7 +1576,6 @@ def generar_reportes():
 
             tabla.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Frame para los botones de exportación
             frame_exportar = ttk.Frame(ventana_inventario)
             frame_exportar.pack(fill="x", padx=10, pady=5)
 
@@ -1551,7 +1631,7 @@ def generar_reportes():
             btn_exportar_pdf.pack(side="left", padx=5)
 
             btn_cerrar = ttk.Button(ventana_inventario, text="Cerrar", command=ventana_inventario.destroy, style="Custom.TButton")
-            btn_cerrar.pack( side="bottom", padx=5)
+            btn_cerrar.pack(side="bottom", padx=5)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el reporte: {e}")
@@ -1562,5 +1642,7 @@ def generar_reportes():
     btn_inventario = ttk.Button(frame, text="Reporte de Inventario", command=reporte_inventario, style="Custom.TButton")
     btn_inventario.pack(pady=5)
 
-    btn_cerrar = ttk.Button(frame, text="Cerrar", command=ventana_reportes.destroy, style="Custom.TButton")
+    btn_cerrar = ttk.Button(frame, text="Cerrar", 
+                           command=lambda: cerrar_ventana_secundaria(ventana_reportes, ventana_principal), 
+                           style="Custom.TButton")
     btn_cerrar.pack(pady=10)

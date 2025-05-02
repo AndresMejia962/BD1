@@ -4,10 +4,11 @@ import sys
 import bcrypt
 import config
 from styles import aplicar_estilo, aplicar_estilo_login
-from database import conectar_db
+# from database import conectar_db  # Eliminada porque ya no existe
 from business_logic import consultar_productos, agregar_producto, gestionar_proveedores, gestionar_clientes, gestionar_empleados, registrar_venta, generar_reportes
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from db_manager import DatabaseManager
 
 # Variables globales
 
@@ -129,11 +130,12 @@ def ventana_inicio_sesion(ventana_raiz):
             return
 
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-            cursor.execute("SELECT usuario_id, password, rol, nombre FROM usuarios WHERE username = %s", (username,))
-            resultado = cursor.fetchone()
-            db.close()
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as connection:
+                cursor = connection.cursor()
+                cursor.execute("SELECT usuario_id, password, rol, nombre FROM usuarios WHERE username = %s", (username,))
+                resultado = cursor.fetchone()
+                cursor.close()
 
             if resultado:
                 usuario_id, stored_password, rol, nombre = resultado
@@ -184,39 +186,51 @@ def ventana_inicio_sesion(ventana_raiz):
 
 # Función para mostrar la ventana principal
 def mostrar_ventana_principal(ventana_raiz):
-    print("Rol asignado:", config.usuario_rol)  # Imprimir el rol del usuario
+    print("Rol asignado:", config.usuario_rol)
     for widget in ventana_raiz.winfo_children():
         widget.destroy()
 
     ventana_raiz.title("Gestión de Inventario")
-    ventana_raiz.config(bg="#263238")  # Fondo gris oscuro
-    ventana_raiz.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana(ventana_raiz))  # Cerrar la ventana principal
+    ventana_raiz.config(bg="#263238")
+    ventana_raiz.protocol("WM_DELETE_WINDOW", lambda: cerrar_ventana(ventana_raiz))
 
-    ventana_ancho = 600
-    ventana_alto = 500
-    pantalla_ancho = ventana_raiz.winfo_screenwidth()
-    pantalla_alto = ventana_raiz.winfo_screenheight()
-    x = (pantalla_ancho // 2) - (ventana_ancho // 2)
-    y = (pantalla_alto // 2) - (ventana_alto // 2)
-    ventana_raiz.geometry(f"{ventana_ancho}x{ventana_alto}+{x}+{y}")
-   
+    # Configurar el tamaño mínimo de la ventana
+    ventana_raiz.minsize(800, 600)
+
+    # Hacer que la ventana sea redimensionable
+    ventana_raiz.resizable(True, True)
+
+    # Configurar el grid para que los widgets se redimensionen
+    ventana_raiz.grid_rowconfigure(0, weight=1)
+    ventana_raiz.grid_columnconfigure(1, weight=1)
+
     aplicar_estilo()
 
+    # Frame principal con grid
     frame_principal = ttk.Frame(ventana_raiz)
-    frame_principal.pack(fill="both", expand=True)
+    frame_principal.grid(row=0, column=0, sticky="nsew")
+    frame_principal.grid_rowconfigure(0, weight=1)
+    frame_principal.grid_columnconfigure(1, weight=1)
 
+    # Sidebar con grid
     sidebar_frame = ttk.Frame(frame_principal, style="Sidebar.TFrame")
-    sidebar_frame.pack(side="left", fill="y", padx=0, pady=0)
+    sidebar_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
+    sidebar_frame.grid_rowconfigure(8, weight=1)  # Para empujar el botón de cerrar sesión hacia abajo
 
+    # Content frame con grid
     content_frame = ttk.Frame(frame_principal)
-    content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+    content_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+    content_frame.grid_rowconfigure(1, weight=1)
+    content_frame.grid_columnconfigure(0, weight=1)
 
     header_label = ttk.Label(content_frame, text="Gestión de Inventario", style="Header.TLabel")
-    header_label.pack(pady=(0, 20))
+    header_label.grid(row=0, column=0, pady=(0, 20))
 
     # Frame para el resumen con estilo mejorado
     summary_frame = ttk.LabelFrame(content_frame, text="📊 Resumen del Sistema", padding=15, style="Header.TFrame")
-    summary_frame.pack(fill="both", expand=True, padx=20, pady=15)
+    summary_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=15)
+    summary_frame.grid_rowconfigure(0, weight=1)
+    summary_frame.grid_columnconfigure(0, weight=1)
 
     # Frame interno para el contenido del resumen
     summary_content = ttk.Frame(summary_frame, style="Summary.TFrame")
@@ -295,6 +309,19 @@ def mostrar_ventana_principal(ventana_raiz):
                                style="Custom.TButton")
     btn_actualizar.pack(pady=15)
 
+    # Integrar el ShortcutManager
+    from shortcuts import ShortcutManager
+    shortcut_manager = ShortcutManager(ventana_raiz)
+
+    # Configurar el redimensionamiento de widgets
+    def on_resize(event):
+        # Ajustar el tamaño de las columnas de la tabla
+        if hasattr(content_frame, 'tabla'):
+            for col in content_frame.tabla['columns']:
+                content_frame.tabla.column(col, width=event.width // len(content_frame.tabla['columns']))
+
+    ventana_raiz.bind('<Configure>', on_resize)
+
     # Primera actualización del resumen
     actualizar_resumen(summary_frame)
 
@@ -351,8 +378,9 @@ def mostrar_ventana_principal(ventana_raiz):
 def actualizar_resumen(summary_frame):
     try:
         print("Iniciando actualización del resumen...")
-        db = conectar_db()
-        cursor = db.cursor()
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as connection:
+            cursor = connection.cursor()
 
         # Total de productos
         cursor.execute("SELECT COUNT(*) FROM productos")
@@ -511,7 +539,7 @@ def actualizar_resumen(summary_frame):
             canvas.get_tk_widget().pack(fill="both", expand=True)
             print("Gráfico integrado en la interfaz")
 
-        db.close()
+        cursor.close()
         print("Actualización del resumen completada")
 
     except Exception as e:
@@ -635,35 +663,30 @@ def ventana_registro(ventana_raiz):
             return
 
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-            
-            # Verificar si el usuario ya existe
-            cursor.execute("SELECT username FROM usuarios WHERE username = %s", (username,))
-            if cursor.fetchone():
-                messagebox.showerror("Error", "El nombre de usuario ya existe.")
-                return
-
-            # Verificar si el correo ya existe
-            cursor.execute("SELECT email FROM usuarios WHERE email = %s", (correo,))
-            if cursor.fetchone():
-                messagebox.showerror("Error", "El correo electrónico ya está registrado.")
-                return
-
-            # Hashear la contraseña
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-            
-            # Insertar el nuevo usuario
-            cursor.execute(
-                "INSERT INTO usuarios (username, nombre, email, password, rol) VALUES (%s, %s, %s, %s, %s)",
-                (username, nombre, correo, hashed_password, rol)
-            )
-            db.commit()
-            db.close()
-
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as connection:
+                cursor = connection.cursor()
+                # Verificar si el usuario ya existe
+                cursor.execute("SELECT username FROM usuarios WHERE username = %s", (username,))
+                if cursor.fetchone():
+                    messagebox.showerror("Error", "El nombre de usuario ya existe.")
+                    return
+                # Verificar si el correo ya existe
+                cursor.execute("SELECT email FROM usuarios WHERE email = %s", (correo,))
+                if cursor.fetchone():
+                    messagebox.showerror("Error", "El correo electrónico ya está registrado.")
+                    return
+                # Hashear la contraseña
+                hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+                # Insertar el nuevo usuario
+                cursor.execute(
+                    "INSERT INTO usuarios (username, nombre, email, password, rol) VALUES (%s, %s, %s, %s, %s)",
+                    (username, nombre, correo, hashed_password, rol)
+                )
+                connection.commit()
+                cursor.close()
             messagebox.showinfo("Éxito", "Usuario registrado exitosamente.")
             registro_window.destroy()
-
         except Exception as e:
             messagebox.showerror("Error", f"Error al registrar usuario: {e}")
 

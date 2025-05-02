@@ -2,7 +2,7 @@ import tkinter as tk
 import bcrypt
 import sys
 from ui import ventana_inicio_sesion
-from database import conectar_db
+# from database import conectar_db  # Eliminada porque ya no existe
 
 if __name__ == "__main__":
     # Crear la ventana raíz
@@ -18,12 +18,13 @@ if __name__ == "__main__":
 
     # Actualizar las contraseñas hasheadas en la base de datos
     try:
-        db = conectar_db()
-        cursor = db.cursor() 
-        cursor.execute("UPDATE usuarios SET password = %s WHERE username = 'andrea'", (hashed_admin,))
-        cursor.execute("UPDATE usuarios SET password = %s WHERE username = 'pedro'", (hashed_empleado,))
-        db.commit()
-        db.close()
+        from db_manager import DatabaseManager
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("UPDATE usuarios SET password = %s WHERE username = 'andrea'", (hashed_admin,))
+            cursor.execute("UPDATE usuarios SET password = %s WHERE username = 'pedro'", (hashed_empleado,))
+            db.commit()
     except Exception as e:
         print(f"Error al actualizar contraseñas: {e}")
 

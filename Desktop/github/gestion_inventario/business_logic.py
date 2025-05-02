@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-from database import conectar_db, obtener_proveedores, obtener_productos, obtener_clientes, obtener_empleados
+from database import obtener_proveedores, obtener_productos, obtener_clientes, obtener_empleados
 import pandas as pd
 import config
 from reportlab.lib.pagesizes import letter
@@ -9,6 +9,9 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 import sys
+from db_manager import DatabaseManager
+import mysql.connector
+from mysql.connector import pooling
 
 global usuario_rol
 
@@ -33,15 +36,16 @@ def consultar_productos(ventana_principal=None):
         ventana_principal.withdraw()
 
     try:
-        db = conectar_db()
-        cursor = db.cursor()
-        cursor.execute("""
-            SELECT p.producto_id, p.nombre, p.categoria, p.precio, p.stock, pr.nombre, p.descripcion 
-            FROM productos p
-            LEFT JOIN proveedores pr ON p.proveedor_id = pr.proveedor_id
-        """)
-        productos = cursor.fetchall()
-        db.close()
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("""
+                SELECT p.producto_id, p.nombre, p.categoria, p.precio, p.stock, pr.nombre, p.descripcion 
+                FROM productos p
+                LEFT JOIN proveedores pr ON p.proveedor_id = pr.proveedor_id
+            """)
+            productos = cursor.fetchall()
+            cursor.close()
 
         ventana_productos = tk.Toplevel()
         ventana_productos.title("Lista de Productos")
@@ -192,15 +196,16 @@ def consultar_productos(ventana_principal=None):
                         messagebox.showerror("Error", "El stock debe ser un número entero no negativo.")
                         return
 
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        UPDATE productos 
-                        SET nombre = %s, categoria = %s, precio = %s, stock = %s, proveedor_id = %s, descripcion = %s 
-                        WHERE producto_id = %s
-                    """, (nuevo_nombre, nueva_categoria, nuevo_precio, nuevo_stock, proveedor_id, nueva_descripcion, producto_id))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            UPDATE productos 
+                            SET nombre = %s, categoria = %s, precio = %s, stock = %s, proveedor_id = %s, descripcion = %s 
+                            WHERE producto_id = %s
+                        """, (nuevo_nombre, nueva_categoria, nuevo_precio, nuevo_stock, proveedor_id, nueva_descripcion, producto_id))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Producto actualizado correctamente")
                     ventana_actualizar.destroy()
@@ -230,11 +235,12 @@ def consultar_productos(ventana_principal=None):
             producto_id = item['values'][0]
 
             try:
-                db = conectar_db()
-                cursor = db.cursor()
-                cursor.execute("DELETE FROM productos WHERE producto_id = %s", (producto_id,))
-                db.commit()
-                db.close()
+                db_manager = DatabaseManager()
+                with db_manager.get_connection() as connection:
+                    cursor = connection.cursor()
+                    cursor.execute("DELETE FROM productos WHERE producto_id = %s", (producto_id,))
+                    connection.commit()
+                    cursor.close()
 
                 messagebox.showinfo("Éxito", "Producto eliminado correctamente")
                 ventana_productos.destroy()
@@ -297,16 +303,17 @@ def agregar_producto(ventana_principal=None):
             return
 
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-            cursor.execute("""
-                INSERT INTO productos (nombre, categoria, precio, stock, proveedor_id, descripcion) 
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (nombre, categoria, precio, stock, proveedor_id, descripcion))
-            db.commit()
-            messagebox.showinfo("Éxito", "Producto agregado correctamente")
-            db.close()
-            ventana_agregar.destroy()
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as connection:
+                cursor = connection.cursor()
+                cursor.execute("""
+                    INSERT INTO productos (nombre, categoria, precio, stock, proveedor_id, descripcion) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (nombre, categoria, precio, stock, proveedor_id, descripcion))
+                connection.commit()
+                messagebox.showinfo("Éxito", "Producto agregado correctamente")
+                cursor.close()
+                ventana_agregar.destroy()
             if ventana_principal:
                 ventana_principal.deiconify()
         except Exception as e:
@@ -362,11 +369,12 @@ def gestionar_proveedores(ventana_principal=None):
         return
 
     try:
-        db = conectar_db()
-        cursor = db.cursor()
-        cursor.execute("SELECT proveedor_id, nombre, contacto, telefono, email, direccion FROM proveedores")
-        proveedores = cursor.fetchall()
-        db.close()
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("SELECT proveedor_id, nombre, contacto, telefono, email, direccion FROM proveedores")
+            proveedores = cursor.fetchall()
+            cursor.close()
 
         ventana_proveedores = tk.Toplevel()
         ventana_proveedores.title("Gestión de Proveedores")
@@ -451,14 +459,15 @@ def gestionar_proveedores(ventana_principal=None):
                     return
 
                 try:
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        INSERT INTO proveedores (nombre, contacto, telefono, email, direccion) 
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (nombre, contacto, telefono, email, direccion))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            INSERT INTO proveedores (nombre, contacto, telefono, email, direccion) 
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (nombre, contacto, telefono, email, direccion))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Proveedor agregado correctamente")
                     ventana_agregar.destroy()
@@ -568,15 +577,16 @@ def gestionar_proveedores(ventana_principal=None):
                         messagebox.showerror("Error", "El teléfono debe contener solo números y opcionalmente un '+' al inicio.")
                         return
 
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        UPDATE proveedores 
-                        SET nombre = %s, contacto = %s, telefono = %s, email = %s, direccion = %s 
-                        WHERE proveedor_id = %s
-                    """, (nuevo_nombre, nuevo_contacto, nuevo_telefono, nuevo_email, nueva_direccion, proveedor_id))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            UPDATE proveedores 
+                            SET nombre = %s, contacto = %s, telefono = %s, email = %s, direccion = %s 
+                            WHERE proveedor_id = %s
+                        """, (nuevo_nombre, nuevo_contacto, nuevo_telefono, nuevo_email, nueva_direccion, proveedor_id))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Proveedor actualizado correctamente")
                     ventana_actualizar.destroy()
@@ -606,11 +616,12 @@ def gestionar_proveedores(ventana_principal=None):
             proveedor_id = item['values'][0]
 
             try:
-                db = conectar_db()
-                cursor = db.cursor()
-                cursor.execute("DELETE FROM proveedores WHERE proveedor_id = %s", (proveedor_id,))
-                db.commit()
-                db.close()
+                db_manager = DatabaseManager()
+                with db_manager.get_connection() as connection:
+                    cursor = connection.cursor()
+                    cursor.execute("DELETE FROM proveedores WHERE proveedor_id = %s", (proveedor_id,))
+                    connection.commit()
+                    cursor.close()
 
                 messagebox.showinfo("Éxito", "Proveedor eliminado correctamente")
                 ventana_proveedores.destroy()
@@ -647,11 +658,12 @@ def gestionar_clientes(ventana_principal=None):
         return
 
     try:
-        db = conectar_db()
-        cursor = db.cursor()
-        cursor.execute("SELECT cliente_id, nombre, direccion, telefono, email, cedula FROM clientes")
-        clientes = cursor.fetchall()
-        db.close()
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("SELECT cliente_id, nombre, direccion, telefono, email, cedula FROM clientes")
+            clientes = cursor.fetchall()
+            cursor.close()
 
         ventana_clientes = tk.Toplevel()
         ventana_clientes.title("Gestión de Clientes")
@@ -742,14 +754,15 @@ def gestionar_clientes(ventana_principal=None):
                     return
 
                 try:
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        INSERT INTO clientes (nombre, direccion, telefono, email, cedula) 
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (nombre, direccion, telefono, email, cedula))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            INSERT INTO clientes (nombre, direccion, telefono, email, cedula) 
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (nombre, direccion, telefono, email, cedula))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Cliente agregado correctamente")
                     ventana_agregar.destroy()
@@ -865,15 +878,16 @@ def gestionar_clientes(ventana_principal=None):
                         messagebox.showerror("Error", "El teléfono debe contener solo números y opcionalmente un '+' al inicio.")
                         return
 
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        UPDATE clientes 
-                        SET nombre = %s, direccion = %s, telefono = %s, email = %s, cedula = %s 
-                        WHERE cliente_id = %s
-                    """, (nuevo_nombre, nueva_direccion, nuevo_telefono, nuevo_email, nueva_cedula, cliente_id))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            UPDATE clientes 
+                            SET nombre = %s, direccion = %s, telefono = %s, email = %s, cedula = %s 
+                            WHERE cliente_id = %s
+                        """, (nuevo_nombre, nueva_direccion, nuevo_telefono, nuevo_email, nueva_cedula, cliente_id))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Cliente actualizado correctamente")
                     ventana_actualizar.destroy()
@@ -903,11 +917,12 @@ def gestionar_clientes(ventana_principal=None):
             cliente_id = item['values'][0]
 
             try:
-                db = conectar_db()
-                cursor = db.cursor()
-                cursor.execute("DELETE FROM clientes WHERE cliente_id = %s", (cliente_id,))
-                db.commit()
-                db.close()
+                db_manager = DatabaseManager()
+                with db_manager.get_connection() as connection:
+                    cursor = connection.cursor()
+                    cursor.execute("DELETE FROM clientes WHERE cliente_id = %s", (cliente_id,))
+                    connection.commit()
+                    cursor.close()
 
                 messagebox.showinfo("Éxito", "Cliente eliminado correctamente")
                 ventana_clientes.destroy()
@@ -944,11 +959,12 @@ def gestionar_empleados(ventana_principal=None):
         return
 
     try:
-        db = conectar_db()
-        cursor = db.cursor()
-        cursor.execute("SELECT empleado_id, nombre, cargo, telefono, email FROM empleados")
-        empleados = cursor.fetchall()
-        db.close()
+        db_manager = DatabaseManager()
+        with db_manager.get_connection() as db:
+            cursor = db.cursor()
+            cursor.execute("SELECT usuario_id, nombre, rol AS cargo, telefono, email FROM usuarios")
+            empleados = cursor.fetchall()
+            cursor.close()
 
         ventana_empleados = tk.Toplevel()
         ventana_empleados.title("Gestión de Empleados")
@@ -1034,14 +1050,15 @@ def gestionar_empleados(ventana_principal=None):
                     return
 
                 try:
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        INSERT INTO empleados (nombre, cargo, telefono, email) 
-                        VALUES (%s, %s, %s, %s)
-                    """, (nombre, cargo, telefono, email))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            INSERT INTO empleados (nombre, cargo, telefono, email) 
+                            VALUES (%s, %s, %s, %s)
+                        """, (nombre, cargo, telefono, email))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Empleado agregado correctamente")
                     ventana_agregar.destroy()
@@ -1143,15 +1160,16 @@ def gestionar_empleados(ventana_principal=None):
                         messagebox.showerror("Error", "El teléfono debe contener solo números y opcionalmente un '+' al inicio.")
                         return
 
-                    db = conectar_db()
-                    cursor = db.cursor()
-                    cursor.execute("""
-                        UPDATE empleados 
-                        SET nombre = %s, cargo = %s, telefono = %s, email = %s 
-                        WHERE empleado_id = %s
-                    """, (nuevo_nombre, nuevo_cargo, nuevo_telefono, nuevo_email, empleado_id))
-                    db.commit()
-                    db.close()
+                    db_manager = DatabaseManager()
+                    with db_manager.get_connection() as connection:
+                        cursor = connection.cursor()
+                        cursor.execute("""
+                            UPDATE empleados 
+                            SET nombre = %s, cargo = %s, telefono = %s, email = %s 
+                            WHERE empleado_id = %s
+                        """, (nuevo_nombre, nuevo_cargo, nuevo_telefono, nuevo_email, empleado_id))
+                    connection.commit()
+                    cursor.close()
 
                     messagebox.showinfo("Éxito", "Empleado actualizado correctamente")
                     ventana_actualizar.destroy()
@@ -1181,11 +1199,12 @@ def gestionar_empleados(ventana_principal=None):
             empleado_id = item['values'][0]
 
             try:
-                db = conectar_db()
-                cursor = db.cursor()
-                cursor.execute("DELETE FROM empleados WHERE empleado_id = %s", (empleado_id,))
-                db.commit()
-                db.close()
+                db_manager = DatabaseManager()
+                with db_manager.get_connection() as connection:
+                    cursor = connection.cursor()
+                    cursor.execute("DELETE FROM empleados WHERE empleado_id = %s", (empleado_id,))
+                    connection.commit()
+                    cursor.close()
 
                 messagebox.showinfo("Éxito", "Empleado eliminado correctamente")
                 ventana_empleados.destroy()
@@ -1357,63 +1376,64 @@ def registrar_venta(ventana_principal=None):
                     return
 
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-
-            cursor.execute("""
-                SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
-                FROM pedidos p
-                LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
-                LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
-            """)
-            ventas = cursor.fetchall()
-
-            cursor.execute("""
-                INSERT INTO pedidos (cliente_id, usuario_id, fecha, total, nombre_cliente_no_registrado, cedula_cliente_no_registrado) 
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (cliente_id, config.usuario_id, fecha, total, nombre_no_registrado, cedula_no_registrado))
-            pedido_id = cursor.lastrowid
-
-            for item in tabla.get_children():
-                valores = tabla.item(item)['values']
-                producto_id = valores[0]
-                cantidad = valores[2]
-                precio_unitario = valores[3]
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as connection:
+                cursor = connection.cursor()
 
                 cursor.execute("""
-                    INSERT INTO pedido_detalle (pedido_id, producto_id, cantidad, precio_unitario) 
+                    SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
+                    FROM pedidos p
+                    LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
+                    LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
+                """)
+                ventas = cursor.fetchall()
+
+                cursor.execute("""
+                    INSERT INTO pedidos (cliente_id, usuario_id, fecha, total, nombre_cliente_no_registrado, cedula_cliente_no_registrado) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (cliente_id, config.usuario_id, fecha, total, nombre_no_registrado, cedula_no_registrado))
+                pedido_id = cursor.lastrowid
+
+                for item in tabla.get_children():
+                    valores = tabla.item(item)['values']
+                    producto_id = valores[0]
+                    cantidad = valores[2]
+                    precio_unitario = valores[3]
+
+                    cursor.execute("""
+                        INSERT INTO pedido_detalle (pedido_id, producto_id, cantidad, precio_unitario) 
+                        VALUES (%s, %s, %s, %s)
+                    """, (pedido_id, producto_id, cantidad, precio_unitario))
+
+                    cursor.execute("UPDATE productos SET stock = stock - %s WHERE producto_id = %s", (cantidad, producto_id))
+
+                numero_factura = f"FAC-{pedido_id:06d}"
+                cursor.execute("""
+                    INSERT INTO facturas (pedido_id, numero_factura, fecha_emision, total) 
                     VALUES (%s, %s, %s, %s)
-                """, (pedido_id, producto_id, cantidad, precio_unitario))
+                """, (pedido_id, numero_factura, fecha, total))
 
-                cursor.execute("UPDATE productos SET stock = stock - %s WHERE producto_id = %s", (cantidad, producto_id))
+                cursor.execute("""
+                    INSERT INTO pagos (pedido_id, fecha_pago, monto, metodo_pago) 
+                    VALUES (%s, %s, %s, %s)
+                """, (pedido_id, fecha, total, metodo_pago))
 
-            numero_factura = f"FAC-{pedido_id:06d}"
-            cursor.execute("""
-                INSERT INTO facturas (pedido_id, numero_factura, fecha_emision, total) 
-                VALUES (%s, %s, %s, %s)
-            """, (pedido_id, numero_factura, fecha, total))
+                connection.commit()
+                cursor.close()
 
-            cursor.execute("""
-                INSERT INTO pagos (pedido_id, fecha_pago, monto, metodo_pago) 
-                VALUES (%s, %s, %s, %s)
-            """, (pedido_id, fecha, total, metodo_pago))
+                if cliente:
+                    cliente_mostrar = cliente
+                else:
+                    cliente_mostrar = f"{nombre_no_registrado} (Cédula: {cedula_no_registrado})" if nombre_no_registrado else "Cliente no registrado"
+                factura_texto = f"Factura: {numero_factura}\nFecha: {fecha}\nCliente: {cliente_mostrar}\nVendedor: {config.usuario_nombre}\nMétodo de Pago: {metodo_pago}\nTotal: ${total:.2f}\n\nDetalles:\n"
+                for item in tabla.get_children():
+                    valores = tabla.item(item)['values']
+                    factura_texto += f"- {valores[1]}: {valores[2]} x ${valores[3]} = ${valores[4]}\n"
+                messagebox.showinfo("Factura Generada", factura_texto)
 
-            db.commit()
-            db.close()
-
-            if cliente:
-                cliente_mostrar = cliente
-            else:
-                cliente_mostrar = f"{nombre_no_registrado} (Cédula: {cedula_no_registrado})" if nombre_no_registrado else "Cliente no registrado"
-            factura_texto = f"Factura: {numero_factura}\nFecha: {fecha}\nCliente: {cliente_mostrar}\nVendedor: {config.usuario_nombre}\nMétodo de Pago: {metodo_pago}\nTotal: ${total:.2f}\n\nDetalles:\n"
-            for item in tabla.get_children():
-                valores = tabla.item(item)['values']
-                factura_texto += f"- {valores[1]}: {valores[2]} x ${valores[3]} = ${valores[4]}\n"
-            messagebox.showinfo("Factura Generada", factura_texto)
-
-            ventana_venta.destroy()
-            if ventana_principal:
-                ventana_principal.deiconify()
+                ventana_venta.destroy()
+                if ventana_principal:
+                    ventana_principal.deiconify()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo registrar la venta: {e}")
 
@@ -1443,113 +1463,119 @@ def generar_reportes(ventana_principal=None):
 
     def reporte_ventas():
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-            cursor.execute("""
-                SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
-                FROM pedidos p
-                LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
-                LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
-            """)
-            ventas = cursor.fetchall()
-            db.close()
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as db:
+                cursor = db.cursor()
+                cursor.execute("""
+                    SELECT p.pedido_id, p.fecha, c.nombre, u.nombre, p.total, p.nombre_cliente_no_registrado, p.cedula_cliente_no_registrado
+                    FROM pedidos p
+                    LEFT JOIN clientes c ON p.cliente_id = c.cliente_id
+                    LEFT JOIN usuarios u ON p.usuario_id = u.usuario_id
+                """)
+                ventas = cursor.fetchall()
+                cursor.close()
 
-            ventana_ventas = tk.Toplevel(ventana_reportes)  # Hacer ventana_reportes el padre
-            ventana_ventas.title("Reporte de Ventas")
-            ventana_ventas.geometry("900x500")
-            ventana_ventas.config(bg="#263238")
-            ventana_ventas.transient(ventana_reportes)  # Hacer la ventana dependiente de ventana_reportes
-            
+                ventana_ventas = tk.Toplevel(ventana_reportes)  # Hacer ventana_reportes el padre
+                ventana_ventas.title("Reporte de Ventas")
+                ventana_ventas.geometry("900x500")
+                ventana_ventas.config(bg="#263238")
+                ventana_ventas.transient(ventana_reportes)  # Hacer la ventana dependiente de ventana_reportes
+                
 
-            columnas = ("ID Pedido", "Fecha", "Cliente", "Empleado", "Total")
-            tabla = ttk.Treeview(ventana_ventas, columns=columnas, show="headings", height=15)
+                columnas = ("ID Pedido", "Fecha", "Cliente", "Empleado", "Total")
+                tabla = ttk.Treeview(ventana_ventas, columns=columnas, show="headings", height=15)
 
-            for col in columnas:
-                tabla.heading(col, text=col)
-                tabla.column(col, anchor="center", width=150)
+                for col in columnas:
+                    tabla.heading(col, text=col)
+                    tabla.column(col, anchor="center", width=150)
 
-            tabla.column("Fecha", width=200)
-            tabla.column("Cliente", width=200)
+                tabla.column("Fecha", width=200)
+                tabla.column("Cliente", width=200)
 
-            datos_exportar = []
-            for venta in ventas:
-                cliente = venta[2] if venta[2] else f"{venta[5]} (Cédula: {venta[6]})" if venta[5] else "No registrado"
-                tabla.insert("", tk.END, values=(venta[0], venta[1], cliente, venta[3], venta[4]))
-                datos_exportar.append((venta[0], venta[1], cliente, venta[3], venta[4]))
+                datos_exportar = []
+                for venta in ventas:
+                    cliente = venta[2] if venta[2] else f"{venta[5]} (Cédula: {venta[6]})" if venta[5] else "No registrado"
+                    tabla.insert("", tk.END, values=(venta[0], venta[1], cliente, venta[3], venta[4]))
+                    datos_exportar.append((venta[0], venta[1], cliente, venta[3], venta[4]))
 
-            tabla.pack(fill="both", expand=True, padx=10, pady=10)
+                tabla.pack(fill="both", expand=True, padx=10, pady=10)
 
-            frame_exportar = ttk.Frame(ventana_ventas)
-            frame_exportar.pack(fill="x", padx=10, pady=5)
+                frame_exportar = ttk.Frame(ventana_ventas)
+                frame_exportar.pack(fill="x", padx=10, pady=5)
 
-            def exportar_excel():
-                try:
-                    if not datos_exportar:
-                        messagebox.showwarning("Advertencia", "No hay datos para exportar.")
-                        return
-                    df = pd.DataFrame(datos_exportar, columns=columnas)
-                    df.to_excel("reporte_ventas.xlsx", index=False)
-                    messagebox.showinfo("Éxito", "Reporte de ventas exportado a 'reporte_ventas.xlsx'")
-                except Exception as e:
-                    messagebox.showerror("Error", f"No se pudo exportar a Excel: {e}")
+                def exportar_excel():
+                    try:
+                        if not datos_exportar:
+                            messagebox.showwarning("Advertencia", "No hay datos para exportar.")
+                            return
+                        df = pd.DataFrame(datos_exportar, columns=columnas)
+                        df.to_excel("reporte_ventas.xlsx", index=False)
+                        messagebox.showinfo("Éxito", "Reporte de ventas exportado a 'reporte_ventas.xlsx'")
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo exportar a Excel: {e}")
 
-            def exportar_pdf():
-                try:
-                    if not datos_exportar:
-                        messagebox.showwarning("Advertencia", "No hay datos para exportar.")
-                        return
-                    pdf_file = "reporte_ventas.pdf"
-                    doc = SimpleDocTemplate(pdf_file, pagesize=letter)
-                    elements = []
+                def exportar_pdf():
+                    try:
+                        if not datos_exportar:
+                            messagebox.showwarning("Advertencia", "No hay datos para exportar.")
+                            return
+                        pdf_file = "reporte_ventas.pdf"
+                        doc = SimpleDocTemplate(pdf_file, pagesize=letter)
+                        elements = []
 
-                    styles = getSampleStyleSheet()
-                    elements.append(Paragraph("Reporte de Ventas", styles['Title']))
+                        styles = getSampleStyleSheet()
+                        elements.append(Paragraph("Reporte de Ventas", styles['Title']))
 
-                    data = [columnas]
-                    for row in datos_exportar:
-                        data.append([str(cell) for cell in row])
+                        data = [columnas]
+                        for row in datos_exportar:
+                            data.append([str(cell) for cell in row])
 
-                    table = Table(data)
-                    table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 12),
-                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                    ]))
-                    elements.append(table)
+                        table = Table(data)
+                        table.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 12),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                        ]))
+                        elements.append(table)
 
-                    doc.build(elements)
-                    messagebox.showinfo("Éxito", f"Reporte de ventas exportado a '{pdf_file}'")
-                except Exception as e:
-                    messagebox.showerror("Error", f"No se pudo exportar a PDF: {e}")
+                        doc.build(elements)
+                        messagebox.showinfo("Éxito", f"Reporte de ventas exportado a '{pdf_file}'")
+                    except Exception as e:
+                        messagebox.showerror("Error", f"No se pudo exportar a PDF: {e}")
 
-            btn_exportar_excel = ttk.Button(frame_exportar, text="Exportar a Excel", command=exportar_excel, style="Custom.TButton")
-            btn_exportar_excel.pack(side="left", padx=5)
+                btn_exportar_excel = ttk.Button(frame_exportar, text="Exportar a Excel", command=exportar_excel, style="Custom.TButton")
+                btn_exportar_excel.pack(side="left", padx=5)
 
-            btn_exportar_pdf = ttk.Button(frame_exportar, text="Exportar a PDF", command=exportar_pdf, style="Custom.TButton")
-            btn_exportar_pdf.pack(side="left", padx=5)
+                btn_exportar_pdf = ttk.Button(frame_exportar, text="Exportar a PDF", command=exportar_pdf, style="Custom.TButton")
+                btn_exportar_pdf.pack(side="left", padx=5)
 
-            btn_cerrar = ttk.Button(ventana_ventas, text="Cerrar", command=ventana_ventas.destroy, style="Custom.TButton")
-            btn_cerrar.pack(side="bottom", padx=5)
+                btn_cerrar = ttk.Button(ventana_ventas, text="Cerrar", command=ventana_ventas.destroy, style="Custom.TButton")
+                btn_cerrar.pack(side="bottom", padx=5)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el reporte: {e}")
 
     def reporte_inventario():
         try:
-            db = conectar_db()
-            cursor = db.cursor()
-            cursor.execute("""
-                SELECT p.producto_id, p.nombre, p.categoria, p.stock, p.precio, pr.nombre 
-                FROM productos p
-                LEFT JOIN proveedores pr ON p.proveedor_id = pr.proveedor_id
-            """)
-            productos = cursor.fetchall()
-            db.close()
+            db_manager = DatabaseManager()
+            with db_manager.get_connection() as db:
+                cursor = db.cursor()
+                cursor.execute("""
+                    SELECT p.producto_id, p.nombre, p.categoria, p.stock, p.precio, pr.nombre 
+                    FROM productos p
+                    LEFT JOIN proveedores pr ON p.proveedor_id = pr.proveedor_id
+                """)
+                productos = cursor.fetchall()
+                cursor.close()
+
+            if not productos:
+                messagebox.showinfo("Sin datos", "No hay productos en el inventario.")
+                return
 
             ventana_inventario = tk.Toplevel(ventana_reportes)  # Hacer ventana_reportes el padre
             ventana_inventario.title("Reporte de Inventario")
@@ -1575,6 +1601,41 @@ def generar_reportes(ventana_principal=None):
                 datos_exportar.append(producto)
 
             tabla.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # Alternar color de filas
+            def alternar_colores_tabla(tabla):
+                for i, item in enumerate(tabla.get_children()):
+                    color = "#f0f0f0" if i % 2 == 0 else "#e0e0e0"
+                    tabla.item(item, tags=('evenrow' if i % 2 == 0 else 'oddrow',))
+                tabla.tag_configure('evenrow', background='#f0f0f0')
+                tabla.tag_configure('oddrow', background='#e0e0e0')
+
+            alternar_colores_tabla(tabla)
+
+            # Resaltar bajo stock
+            for item in tabla.get_children():
+                stock = int(tabla.item(item)['values'][3])
+                if stock < 5:
+                    tabla.item(item, tags=('bajo_stock',))
+            tabla.tag_configure('bajo_stock', background='#ffcccc')
+
+            # Campo de búsqueda
+            frame_busqueda = ttk.Frame(ventana_inventario)
+            frame_busqueda.pack(fill="x", padx=10, pady=5)
+            ttk.Label(frame_busqueda, text="Buscar:").pack(side="left")
+            entry_buscar = ttk.Entry(frame_busqueda)
+            entry_buscar.pack(side="left", fill="x", expand=True, padx=5)
+
+            def filtrar_tabla(event=None):
+                filtro = entry_buscar.get().lower()
+                for item in tabla.get_children():
+                    tabla.delete(item)
+                for producto in productos:
+                    if filtro in str(producto[1]).lower() or filtro in str(producto[2]).lower() or filtro in str(producto[5]).lower():
+                        tabla.insert("", tk.END, values=producto)
+                alternar_colores_tabla(tabla)
+
+            entry_buscar.bind("<KeyRelease>", filtrar_tabla)
 
             frame_exportar = ttk.Frame(ventana_inventario)
             frame_exportar.pack(fill="x", padx=10, pady=5)
@@ -1632,6 +1693,37 @@ def generar_reportes(ventana_principal=None):
 
             btn_cerrar = ttk.Button(ventana_inventario, text="Cerrar", command=ventana_inventario.destroy, style="Custom.TButton")
             btn_cerrar.pack(side="bottom", padx=5)
+
+            # --- Tooltips para los botones ---
+            class ToolTip:
+                def __init__(self, widget, text):
+                    self.widget = widget
+                    self.text = text
+                    self.tipwindow = None
+                    self.widget.bind("<Enter>", self.show_tip)
+                    self.widget.bind("<Leave>", self.hide_tip)
+
+                def show_tip(self, event=None):
+                    if self.tipwindow or not self.text:
+                        return
+                    x, y, cx, cy = self.widget.bbox("insert")
+                    x = x + self.widget.winfo_rootx() + 25
+                    y = y + self.widget.winfo_rooty() + 20
+                    self.tipwindow = tw = tk.Toplevel(self.widget)
+                    tw.wm_overrideredirect(True)
+                    tw.wm_geometry(f"+{x}+{y}")
+                    label = tk.Label(tw, text=self.text, justify='left', background="#ffffe0", relief='solid', borderwidth=1, font=("tahoma", "8", "normal"))
+                    label.pack(ipadx=1)
+
+                def hide_tip(self, event=None):
+                    tw = self.tipwindow
+                    self.tipwindow = None
+                    if tw:
+                        tw.destroy()
+
+            ToolTip(btn_exportar_excel, "Exporta el inventario a un archivo Excel (.xlsx)")
+            ToolTip(btn_exportar_pdf, "Exporta el inventario a un archivo PDF")
+            ToolTip(btn_cerrar, "Cerrar la ventana de reporte de inventario")
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo generar el reporte: {e}")

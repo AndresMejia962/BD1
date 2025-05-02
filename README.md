@@ -37,8 +37,16 @@ Sistema completo para la gestión de inventario y facturación, diseñado para p
   - Pillow (Manejo de imágenes)
   - reportlab (Generación de PDFs)
 
-## 📦 Instalación
+## 📦 Instalación y Ejecución
 
+### Opción 1: Ejecutable (.exe) - Recomendado
+1. Descargar el archivo `GestionInventario.exe` de la sección de [Releases](https://github.com/AndresMejia962/BD1/releases)
+2. Configurar la base de datos:
+   - Ejecutar el script SQL `inventario_facturacion.sql` en MySQL
+   - Configurar las credenciales en `config.py`
+3. Hacer doble clic en `GestionInventario.exe` para ejecutar la aplicación
+
+### Opción 2: Desde el código fuente (Para desarrolladores)
 1. Clonar el repositorio:
 ```bash
 git clone https://github.com/AndresMejia962/BD1.git
@@ -57,6 +65,20 @@ pip install -r requirements.txt
 ```bash
 python main.py
 ```
+
+### Generar el ejecutable
+Si deseas generar el ejecutable por tu cuenta:
+1. Instalar PyInstaller:
+```bash
+pip install pyinstaller
+```
+
+2. Generar el ejecutable:
+```bash
+pyinstaller --name=GestionInventario --onefile --windowed --add-data "inventario_facturacion.sql;." --add-data "actualizar_usuarios.sql;." main.py
+```
+
+3. El ejecutable se generará en la carpeta `dist`
 
 ## 👤 Credenciales por Defecto
 
